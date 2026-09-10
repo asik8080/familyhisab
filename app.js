@@ -2,7 +2,25 @@
 const SUPABASE_URL = 'https://oidhtcrntwoirwgqksnj.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_Ls36tMXF2P0e8enwbrPNCA_STcAhs9u';
 const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const rememberMe = document.querySelector('#rememberMe');
+rememberMe.checked = localStorage.getItem('familyhisab:remember') === 'true';
+rememberMe.addEventListener('change', () => localStorage.setItem('familyhisab:remember', String(rememberMe.checked)));
+const authStorage = {
+  getItem(key) {
+    return (rememberMe.checked ? localStorage : sessionStorage).getItem(key);
+  },
+  setItem(key, value) {
+    const selectedStorage = rememberMe.checked ? localStorage : sessionStorage;
+    const otherStorage = rememberMe.checked ? sessionStorage : localStorage;
+    selectedStorage.setItem(key, value);
+    otherStorage.removeItem(key);
+  },
+  removeItem(key) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+  },
+};
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth: { storage: authStorage } });
 
 const authView = document.querySelector('#authView');
 const dashboardView = document.querySelector('#dashboardView');
@@ -10,6 +28,10 @@ const authForm = document.querySelector('#authForm');
 const authMessage = document.querySelector('#authMessage');
 const authSubmit = document.querySelector('#authSubmit');
 const nameField = document.querySelector('#nameField');
+const passwordField = document.querySelector('#passwordField');
+const authOptions = document.querySelector('#authOptions');
+const forgotPasswordLink = document.querySelector('#forgotPasswordLink');
+const backToSignIn = document.querySelector('#backToSignIn');
 const signInTab = document.querySelector('#signInTab');
 const signUpTab = document.querySelector('#signUpTab');
 const expenseForm = document.querySelector('#expenseForm');
@@ -153,9 +175,15 @@ function showMessage(message, isError = false) {
 function setAuthMode(mode) {
   authMode = mode;
   const isSignUp = mode === 'signUp';
+  const isReset = mode === 'reset';
   nameField.classList.toggle('hidden', !isSignUp);
-  document.querySelector('#passwordInput').setAttribute('autocomplete', isSignUp ? 'new-password' : 'current-password');
-  authSubmit.childNodes[0].textContent = isSignUp ? 'Create account ' : 'Sign In ';
+  passwordField.classList.toggle('hidden', isReset);
+  authOptions.classList.toggle('hidden', isSignUp || isReset);
+  backToSignIn.classList.toggle('hidden', !isReset);
+  const passwordInput = document.querySelector('#passwordInput');
+  passwordInput.required = !isReset;
+  passwordInput.setAttribute('autocomplete', isSignUp ? 'new-password' : 'current-password');
+  authSubmit.childNodes[0].textContent = isReset ? 'Send reset link ' : isSignUp ? 'Create account ' : 'Sign In ';
   signInTab.className = isSignUp ? 'rounded-lg px-4 py-2.5 text-sm font-bold text-slate-500 transition' : 'rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-sm';
   signUpTab.className = isSignUp ? 'rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-sm' : 'rounded-lg px-4 py-2.5 text-sm font-bold text-slate-500 transition';
   authMessage.classList.add('hidden');
@@ -177,6 +205,8 @@ async function showDashboard(isVisible, user = currentUser) {
 
 signInTab.addEventListener('click', () => setAuthMode('signIn'));
 signUpTab.addEventListener('click', () => setAuthMode('signUp'));
+forgotPasswordLink.addEventListener('click', () => setAuthMode('reset'));
+backToSignIn.addEventListener('click', () => setAuthMode('signIn'));
 
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -187,7 +217,9 @@ authForm.addEventListener('submit', async (event) => {
   const name = document.querySelector('#nameInput').value.trim();
   let result;
 
-  if (authMode === 'signUp') {
+  if (authMode === 'reset') {
+    result = await supabase.auth.resetPasswordForEmail(email);
+  } else if (authMode === 'signUp') {
     result = await supabase.auth.signUp({ email, password, options: { data: { name } } });
     if (!result.error && result.data.user && result.data.session) {
       await supabase.from('users').upsert({ id: result.data.user.id, name, email }, { onConflict: 'id' });
@@ -199,6 +231,11 @@ authForm.addEventListener('submit', async (event) => {
   authSubmit.disabled = false;
   if (result.error) {
     showMessage(result.error.message, true);
+    return;
+  }
+  if (authMode === 'reset') {
+    showMessage('If an account exists for this email, a password reset link has been sent.');
+    authSubmit.disabled = false;
     return;
   }
   if (authMode === 'signUp' && !result.data.session) {
