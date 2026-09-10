@@ -96,10 +96,10 @@ function setProfileModal(isOpen) {
 async function uploadAvatar(file) {
   if (!currentUser || !file) return null;
   const extension = file.name.split('.').pop().toLowerCase();
-  const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+  const path = `${currentUser.id}/avatar.${extension}`;
   const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type, cacheControl: '3600' });
   if (error) throw error;
-  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+  return `${supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl}?v=${Date.now()}`;
 }
 
 function renderExpenses(expenses) {
@@ -272,6 +272,7 @@ avatarInput.addEventListener('change', async () => {
     return;
   }
   try {
+    profileAvatarPreview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Selected avatar" class="h-full w-full object-cover">`;
     showProfileMessage('Uploading avatar...');
     const avatarUrl = await uploadAvatar(file);
     const { error } = await supabase.from('users').upsert({ id: currentUser.id, name: currentProfile.name || currentUser.user_metadata?.name || 'Family member', email: currentUser.email, phone: currentProfile.phone || '', avatar_url: avatarUrl }, { onConflict: 'id' });
@@ -280,7 +281,7 @@ avatarInput.addEventListener('change', async () => {
     updateProfileUI(currentProfile);
     showProfileMessage('Avatar updated.');
   } catch (error) {
-    showProfileMessage(error.message, true);
+    showProfileMessage(`Avatar upload failed: ${error.message}`, true);
   } finally {
     avatarInput.value = '';
   }
