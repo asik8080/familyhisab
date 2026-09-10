@@ -32,6 +32,13 @@ const passwordField = document.querySelector('#passwordField');
 const authOptions = document.querySelector('#authOptions');
 const forgotPasswordLink = document.querySelector('#forgotPasswordLink');
 const backToSignIn = document.querySelector('#backToSignIn');
+const getCodeButton = document.querySelector('#getCodeButton');
+const resetCodeField = document.querySelector('#resetCodeField');
+const resetCodeInput = document.querySelector('#resetCodeInput');
+const confirmCodeButton = document.querySelector('#confirmCodeButton');
+const newPasswordFields = document.querySelector('#newPasswordFields');
+const newPasswordInput = document.querySelector('#newPasswordInput');
+const confirmPasswordInput = document.querySelector('#confirmPasswordInput');
 const signInTab = document.querySelector('#signInTab');
 const signUpTab = document.querySelector('#signUpTab');
 const expenseForm = document.querySelector('#expenseForm');
@@ -52,6 +59,7 @@ let authMode = 'signIn';
 let currentUser = null;
 let currentProfile = null;
 let expensesChannel = null;
+let resetStep = 'requestCode';
 
 function formatCurrency(amount) {
   return `BDT ${Number(amount || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -176,10 +184,15 @@ function setAuthMode(mode) {
   authMode = mode;
   const isSignUp = mode === 'signUp';
   const isReset = mode === 'reset';
+  resetStep = 'requestCode';
   nameField.classList.toggle('hidden', !isSignUp);
   passwordField.classList.toggle('hidden', isReset);
   authOptions.classList.toggle('hidden', isSignUp || isReset);
   backToSignIn.classList.toggle('hidden', !isReset);
+  getCodeButton.classList.toggle('hidden', !isReset);
+  resetCodeField.classList.add('hidden');
+  newPasswordFields.classList.add('hidden');
+  authSubmit.classList.toggle('hidden', isReset);
   const passwordInput = document.querySelector('#passwordInput');
   passwordInput.required = !isReset;
   passwordInput.setAttribute('autocomplete', isSignUp ? 'new-password' : 'current-password');
@@ -208,8 +221,70 @@ signUpTab.addEventListener('click', () => setAuthMode('signUp'));
 forgotPasswordLink.addEventListener('click', () => setAuthMode('reset'));
 backToSignIn.addEventListener('click', () => setAuthMode('signIn'));
 
+getCodeButton.addEventListener('click', async () => {
+  const email = document.querySelector('#emailInput').value.trim();
+  if (!email) {
+    showMessage('Enter your email address first.', true);
+    return;
+  }
+  getCodeButton.disabled = true;
+  authMessage.classList.add('hidden');
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  getCodeButton.disabled = false;
+  if (error) {
+    showMessage(error.message, true);
+    return;
+  }
+  resetCodeField.classList.remove('hidden');
+  showMessage('A verification code has been sent to your email.');
+});
+
+confirmCodeButton.addEventListener('click', async () => {
+  const email = document.querySelector('#emailInput').value.trim();
+  const token = resetCodeInput.value.trim();
+  if (!token) {
+    showMessage('Enter the verification code from your email.', true);
+    return;
+  }
+  confirmCodeButton.disabled = true;
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
+  confirmCodeButton.disabled = false;
+  if (error) {
+    showMessage(error.message, true);
+    return;
+  }
+  resetStep = 'changePassword';
+  resetCodeField.classList.add('hidden');
+  newPasswordFields.classList.remove('hidden');
+  authSubmit.classList.remove('hidden');
+  authSubmit.childNodes[0].textContent = 'Change password ';
+  showMessage('Code confirmed. Enter and confirm your new password.');
+});
+
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
+  if (authMode === 'reset') {
+    if (resetStep !== 'changePassword') return;
+    const newPassword = newPasswordInput.value;
+    if (newPassword.length < 6) {
+      showMessage('New password must be at least 6 characters.', true);
+      return;
+    }
+    if (newPassword !== confirmPasswordInput.value) {
+      showMessage('New password and confirm password do not match.', true);
+      return;
+    }
+    authSubmit.disabled = true;
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    authSubmit.disabled = false;
+    if (error) {
+      showMessage(error.message, true);
+      return;
+    }
+    setAuthMode('signIn');
+    showMessage('Password changed successfully. You can now sign in with your new password.');
+    return;
+  }
   authSubmit.disabled = true;
   authMessage.classList.add('hidden');
   const email = document.querySelector('#emailInput').value.trim();
@@ -217,9 +292,7 @@ authForm.addEventListener('submit', async (event) => {
   const name = document.querySelector('#nameInput').value.trim();
   let result;
 
-  if (authMode === 'reset') {
-    result = await supabase.auth.resetPasswordForEmail(email);
-  } else if (authMode === 'signUp') {
+  if (authMode === 'signUp') {
     result = await supabase.auth.signUp({ email, password, options: { data: { name } } });
     if (!result.error && result.data.user && result.data.session) {
       await supabase.from('users').upsert({ id: result.data.user.id, name, email }, { onConflict: 'id' });
@@ -231,11 +304,6 @@ authForm.addEventListener('submit', async (event) => {
   authSubmit.disabled = false;
   if (result.error) {
     showMessage(result.error.message, true);
-    return;
-  }
-  if (authMode === 'reset') {
-    showMessage('If an account exists for this email, a password reset link has been sent.');
-    authSubmit.disabled = false;
     return;
   }
   if (authMode === 'signUp' && !result.data.session) {
