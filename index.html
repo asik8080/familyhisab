@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f7fb" />
+    <title>FamilyHisab | Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: { extend: {
+          colors: { ink: '#172033', muted: '#718096', canvas: '#f5f7fb', navy: '#1d3557', mint: '#d9f7ec', coral: '#fff0eb', lilac: '#eeeaff' },
+          fontFamily: { sans: ['DM Sans', 'ui-sans-serif', 'system-ui'] },
+          boxShadow: { soft: '0 18px 45px rgba(29, 53, 87, 0.08)' }
+        } }
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+  </head>
+  <body class="bg-canvas font-sans text-ink antialiased">
+    <div id="mobileOverlay" class="fixed inset-0 z-20 hidden bg-ink/30 backdrop-blur-sm lg:hidden"></div>
+
+    <!-- Fixed navigation rail: collapses into a drawer on small screens. -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-30 flex w-[264px] -translate-x-full flex-col border-r border-slate-200/80 bg-white px-5 py-6 transition-transform duration-300 lg:translate-x-0">
+      <div class="flex items-center justify-between px-2">
+        <a href="#" class="flex items-center gap-3" aria-label="FamilyHisab home">
+          <span class="grid h-10 w-10 place-items-center rounded-xl bg-navy text-white shadow-lg shadow-navy/20"><i data-lucide="wallet-cards" class="h-5 w-5"></i></span>
+          <span class="font-['Space_Grotesk'] text-lg font-bold tracking-tight">family<span class="text-teal-600">hisab</span></span>
+        </a>
+        <button id="closeSidebar" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink lg:hidden" aria-label="Close menu"><i data-lucide="x" class="h-5 w-5"></i></button>
+      </div>
+      <div class="mt-12 px-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</div>
+      <nav class="mt-4 space-y-1" aria-label="Primary navigation">
+        <a href="#dashboard" data-nav="Dashboard" class="nav-item flex items-center gap-3 rounded-xl bg-navy px-3 py-3 text-sm font-semibold text-white shadow-lg shadow-navy/10 transition hover:-translate-y-0.5"><i data-lucide="layout-dashboard" class="h-[18px] w-[18px]"></i><span>Dashboard</span></a>
+        <a href="#expense" data-nav="Expense" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-ink"><i data-lucide="arrow-down-left" class="h-[18px] w-[18px]"></i><span>Expense</span></a>
+        <a href="#income" data-nav="Income" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-ink"><i data-lucide="arrow-up-right" class="h-[18px] w-[18px]"></i><span>Income</span></a>
+        <a href="#reports" data-nav="Reports" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-ink"><i data-lucide="chart-no-axes-combined" class="h-[18px] w-[18px]"></i><span>Reports</span></a>
+      </nav>
+      <div class="mt-auto rounded-2xl bg-[#f2f7f5] p-4"><div class="flex items-center justify-between"><span class="grid h-8 w-8 place-items-center rounded-lg bg-white text-teal-700"><i data-lucide="sparkles" class="h-4 w-4"></i></span><span class="rounded-full bg-mint px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Pro</span></div><p class="mt-4 text-sm font-semibold text-ink">A clearer view of home.</p><p class="mt-1 text-xs leading-5 text-muted">Keep every shared decision moving in the right direction.</p><button class="mt-4 flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-900">Explore insights <i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i></button></div>
+    </aside>
+
+    <div class="min-h-screen lg:pl-[264px]">
+      <!-- Header keeps family context, search, notifications, and profile in one row. -->
+      <header class="sticky top-0 z-10 border-b border-slate-200/80 bg-canvas/90 px-5 py-4 backdrop-blur-md sm:px-8 lg:px-10"><div class="mx-auto flex max-w-[1440px] items-center gap-4"><button id="openSidebar" class="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 shadow-sm hover:text-ink lg:hidden" aria-label="Open menu"><i data-lucide="menu" class="h-5 w-5"></i></button><div class="hidden min-w-[205px] md:block"><p class="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Good morning</p><h1 class="mt-1 font-['Space_Grotesk'] text-lg font-bold tracking-tight">Rahman Family</h1></div><div class="relative ml-auto flex-1 md:mx-auto md:max-w-[430px]"><i data-lucide="search" class="pointer-events-none absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-slate-400"></i><input id="searchInput" type="search" placeholder="Search transactions, reports..." class="h-11 w-full rounded-full border border-slate-200 bg-white pl-11 pr-4 text-sm text-ink shadow-sm outline-none transition placeholder:text-slate-400 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10" /></div><div class="flex items-center gap-2 sm:gap-4"><button class="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-white hover:text-ink" aria-label="Notifications"><i data-lucide="bell" class="h-[19px] w-[19px]"></i><span class="absolute right-1.5 top-1.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-rose-500 px-1 text-[8px] font-bold text-white">3</span></button><div class="hidden h-7 w-px bg-slate-200 sm:block"></div><button id="profileButton" class="flex items-center gap-2 rounded-xl p-1.5 pr-1 transition hover:bg-white" aria-expanded="false"><span class="grid h-8 w-8 place-items-center rounded-lg bg-[#e6d8ca] text-xs font-bold text-[#674a39]">AR</span><span class="hidden text-left sm:block"><span class="block text-xs font-bold leading-4">Ayesha Rahman</span><span class="block text-[10px] text-slate-400">Admin</span></span><i data-lucide="chevron-down" class="h-4 w-4 text-slate-400"></i></button></div></div></header>
+
+      <main class="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
+        <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p class="text-sm font-medium text-slate-400">Tuesday, September 10, 2026</p><h2 class="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-ink sm:text-4xl">Your family at a glance<span class="text-teal-600">.</span></h2></div><button class="flex items-center justify-center gap-2 rounded-xl bg-navy px-4 py-3 text-sm font-bold text-white shadow-lg shadow-navy/15 transition hover:-translate-y-0.5 hover:bg-[#27456f]"><i data-lucide="plus" class="h-4 w-4"></i> Add transaction</button></div>
+        <section class="mt-8 grid gap-4 md:grid-cols-3" aria-label="Financial overview">
+          <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:-translate-y-1"><div class="flex items-start justify-between"><span class="grid h-10 w-10 place-items-center rounded-xl bg-lilac text-violet-700"><i data-lucide="wallet" class="h-5 w-5"></i></span><span class="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700"><i data-lucide="trending-up" class="h-3 w-3"></i> 8.2%</span></div><p class="mt-6 text-sm font-medium text-muted">Total balance</p><p class="mt-1 font-['Space_Grotesk'] text-3xl font-bold tracking-tight">$24,680.50</p><p class="mt-2 text-xs text-slate-400">Compared to last month</p></article>
+          <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:-translate-y-1"><div class="flex items-start justify-between"><span class="grid h-10 w-10 place-items-center rounded-xl bg-mint text-emerald-700"><i data-lucide="arrow-down-to-line" class="h-5 w-5"></i></span><span class="flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700"><i data-lucide="trending-up" class="h-3 w-3"></i> 12.4%</span></div><p class="mt-6 text-sm font-medium text-muted">Total income</p><p class="mt-1 font-['Space_Grotesk'] text-3xl font-bold tracking-tight">$8,420.00</p><p class="mt-2 text-xs text-slate-400">This month</p></article>
+          <article class="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-soft transition hover:-translate-y-1"><div class="flex items-start justify-between"><span class="grid h-10 w-10 place-items-center rounded-xl bg-coral text-orange-600"><i data-lucide="arrow-up-from-line" class="h-5 w-5"></i></span><span class="flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-600"><i data-lucide="trending-down" class="h-3 w-3"></i> 3.1%</span></div><p class="mt-6 text-sm font-medium text-muted">Total expense</p><p class="mt-1 font-['Space_Grotesk'] text-3xl font-bold tracking-tight">$3,760.25</p><p class="mt-2 text-xs text-slate-400">This month</p></article>
+        </section>
+        <section class="mt-8 grid gap-6 xl:grid-cols-[1fr_340px]"><div class="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-soft"><div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6"><div><h3 class="font-['Space_Grotesk'] text-lg font-bold">Recent transactions</h3><p class="mt-1 text-xs text-muted">Your latest household activity</p></div><button class="flex items-center gap-1 text-xs font-bold text-teal-700 hover:text-teal-900">View all <i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i></button></div><div class="overflow-x-auto"><table class="w-full min-w-[570px] text-left"><thead class="bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400"><tr><th class="px-6 py-3">Transaction</th><th class="px-4 py-3">Category</th><th class="px-4 py-3">Date</th><th class="px-6 py-3 text-right">Amount</th></tr></thead><tbody id="transactionRows" class="divide-y divide-slate-100"></tbody></table></div></div>
+          <aside class="rounded-2xl border border-slate-200/80 bg-navy p-6 text-white shadow-soft"><div class="flex items-center justify-between"><span class="grid h-10 w-10 place-items-center rounded-xl bg-white/10 text-teal-200"><i data-lucide="pie-chart" class="h-5 w-5"></i></span><button class="rounded-lg p-2 text-white/50 hover:bg-white/10 hover:text-white" aria-label="More spending options"><i data-lucide="more-horizontal" class="h-5 w-5"></i></button></div><h3 class="mt-6 font-['Space_Grotesk'] text-lg font-bold">Spending snapshot</h3><p class="mt-1 text-xs text-white/55">Where your money went this month</p><div class="mt-7 flex items-center gap-5"><div class="relative grid h-32 w-32 shrink-0 place-items-center rounded-full" style="background: conic-gradient(#70d5b0 0deg 162deg, #f3b58c 162deg 245deg, #9ca9ed 245deg 306deg, #ebedf4 306deg 360deg)"><div class="grid h-20 w-20 place-items-center rounded-full bg-navy"><span class="text-center text-[10px] leading-4 text-white/55">Total<br><strong class="text-sm text-white">$3,760</strong></span></div></div><div class="space-y-3 text-xs"><div class="flex items-center gap-2"><i class="h-2 w-2 rounded-full bg-[#70d5b0]"></i><span class="text-white/60">Home</span><strong class="ml-auto">45%</strong></div><div class="flex items-center gap-2"><i class="h-2 w-2 rounded-full bg-[#f3b58c]"></i><span class="text-white/60">Food</span><strong class="ml-auto">23%</strong></div><div class="flex items-center gap-2"><i class="h-2 w-2 rounded-full bg-[#9ca9ed]"></i><span class="text-white/60">Travel</span><strong class="ml-auto">17%</strong></div></div></div><button class="mt-8 flex w-full items-center justify-center gap-2 rounded-xl bg-white/10 py-3 text-xs font-bold text-white transition hover:bg-white/15">View detailed report <i data-lucide="arrow-up-right" class="h-3.5 w-3.5"></i></button></aside>
+        </section>
+      </main>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>
