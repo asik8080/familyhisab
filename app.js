@@ -27,7 +27,11 @@ const dashboardView = document.querySelector('#dashboardView');
 const authForm = document.querySelector('#authForm');
 const authMessage = document.querySelector('#authMessage');
 const authSubmit = document.querySelector('#authSubmit');
-const nameField = document.querySelector('#nameField');
+const signupFields = document.querySelector('#signupFields');
+const signupDetails = document.querySelector('#signupDetails');
+const confirmPasswordField = document.querySelector('#confirmPasswordField');
+const signupLoginPrompt = document.querySelector('#signupLoginPrompt');
+const signupLoginLink = document.querySelector('#signupLoginLink');
 const passwordField = document.querySelector('#passwordField');
 const authOptions = document.querySelector('#authOptions');
 const forgotPasswordLink = document.querySelector('#forgotPasswordLink');
@@ -55,6 +59,15 @@ const profileMessage = document.querySelector('#profileMessage');
 const saveProfileButton = document.querySelector('#saveProfileButton');
 const profileAvatarPreview = document.querySelector('#profileAvatarPreview');
 const avatarInput = document.querySelector('#avatarInput');
+const firstNameInput = document.querySelector('#firstNameInput');
+const lastNameInput = document.querySelector('#lastNameInput');
+const familyNameInput = document.querySelector('#familyNameInput');
+const birthDateInput = document.querySelector('#birthDateInput');
+const phoneInput = document.querySelector('#phoneInput');
+const maritalStatusInput = document.querySelector('#maritalStatusInput');
+const nationalityInput = document.querySelector('#nationalityInput');
+const idCardInput = document.querySelector('#idCardInput');
+const signupConfirmPasswordInput = document.querySelector('#signupConfirmPasswordInput');
 let authMode = 'signIn';
 let currentUser = null;
 let currentProfile = null;
@@ -110,6 +123,25 @@ async function loadProfile() {
     if (profileInsertError) showProfileMessage(profileInsertError.message, true);
   }
   updateProfileUI(currentProfile);
+}
+
+async function syncSignupProfile(user) {
+  const metadata = user?.user_metadata || {};
+  if (!metadata.first_name && !metadata.last_name && !metadata.family_name) return;
+  const { error } = await supabase.from('users').upsert({
+    id: user.id,
+    name: metadata.name || `${metadata.first_name || ''} ${metadata.last_name || ''}`.trim(),
+    first_name: metadata.first_name || '',
+    last_name: metadata.last_name || '',
+    email: user.email || '',
+    family_name: metadata.family_name || '',
+    birth_date: metadata.birth_date || null,
+    phone: metadata.phone || '',
+    marital_status: metadata.marital_status || '',
+    nationality: metadata.nationality || 'Bangladeshi',
+    id_card: metadata.id_card || null,
+  }, { onConflict: 'id' });
+  if (error) showProfileMessage(`Profile sync failed: ${error.message}`, true);
 }
 
 function showProfileMessage(message, isError = false) {
@@ -185,7 +217,10 @@ function setAuthMode(mode) {
   const isSignUp = mode === 'signUp';
   const isReset = mode === 'reset';
   resetStep = 'requestCode';
-  nameField.classList.toggle('hidden', !isSignUp);
+  signupFields.classList.toggle('hidden', !isSignUp);
+  signupDetails.classList.toggle('hidden', !isSignUp);
+  confirmPasswordField.classList.toggle('hidden', !isSignUp);
+  signupLoginPrompt.classList.toggle('hidden', !isSignUp);
   passwordField.classList.toggle('hidden', isReset);
   authOptions.classList.toggle('hidden', isSignUp || isReset);
   backToSignIn.classList.toggle('hidden', !isReset);
@@ -195,8 +230,12 @@ function setAuthMode(mode) {
   authSubmit.classList.toggle('hidden', isReset);
   const passwordInput = document.querySelector('#passwordInput');
   passwordInput.required = !isReset;
+  [firstNameInput, lastNameInput, familyNameInput, birthDateInput, phoneInput, maritalStatusInput, nationalityInput].forEach((input) => { input.required = isSignUp; });
+  signupConfirmPasswordInput.required = isSignUp;
   passwordInput.setAttribute('autocomplete', isSignUp ? 'new-password' : 'current-password');
   authSubmit.childNodes[0].textContent = isReset ? 'Send reset link ' : isSignUp ? 'Create account ' : 'Sign In ';
+  authSubmit.classList.toggle('bg-navy', !isSignUp);
+  authSubmit.classList.toggle('bg-[#0088ff]', isSignUp);
   signInTab.className = isSignUp ? 'rounded-lg px-4 py-2.5 text-sm font-bold text-slate-500 transition' : 'rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-sm';
   signUpTab.className = isSignUp ? 'rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-ink shadow-sm' : 'rounded-lg px-4 py-2.5 text-sm font-bold text-slate-500 transition';
   authMessage.classList.add('hidden');
@@ -208,6 +247,7 @@ async function showDashboard(isVisible, user = currentUser) {
   if (isVisible) {
     currentUser = user;
     expenseDate.value = new Date().toISOString().slice(0, 10);
+    await syncSignupProfile(currentUser);
     await loadProfile();
     await loadExpenses();
     subscribeToExpenses();
@@ -220,6 +260,20 @@ signInTab.addEventListener('click', () => setAuthMode('signIn'));
 signUpTab.addEventListener('click', () => setAuthMode('signUp'));
 forgotPasswordLink.addEventListener('click', () => setAuthMode('reset'));
 backToSignIn.addEventListener('click', () => setAuthMode('signIn'));
+signupLoginLink.addEventListener('click', () => setAuthMode('signIn'));
+
+document.querySelectorAll('[data-password-toggle]').forEach((toggle) => {
+  toggle.addEventListener('click', () => {
+    const input = document.querySelector(`#${toggle.dataset.passwordToggle}`);
+    const isPassword = input.type === 'password';
+    input.type = isPassword ? 'text' : 'password';
+    toggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    toggle.innerHTML = `<i data-lucide="${isPassword ? 'eye-off' : 'eye'}" class="h-4 w-4"></i>`;
+    lucide.createIcons();
+  });
+});
+
+setAuthMode('signIn');
 
 getCodeButton.addEventListener('click', async () => {
   const email = document.querySelector('#emailInput').value.trim();
@@ -289,13 +343,27 @@ authForm.addEventListener('submit', async (event) => {
   authMessage.classList.add('hidden');
   const email = document.querySelector('#emailInput').value.trim();
   const password = document.querySelector('#passwordInput').value;
-  const name = document.querySelector('#nameInput').value.trim();
+  const firstName = firstNameInput.value.trim();
+  const lastName = lastNameInput.value.trim();
+  const fullName = `${firstName} ${lastName}`.trim();
+  const confirmPassword = signupConfirmPasswordInput.value;
   let result;
 
   if (authMode === 'signUp') {
-    result = await supabase.auth.signUp({ email, password, options: { data: { name } } });
+    if (password !== confirmPassword) {
+      authSubmit.disabled = false;
+      showMessage('Password and confirm password do not match.', true);
+      return;
+    }
+    const profilePayload = { name: fullName, first_name: firstName, last_name: lastName, email, family_name: familyNameInput.value.trim(), birth_date: birthDateInput.value, phone: phoneInput.value.trim(), marital_status: maritalStatusInput.value, nationality: nationalityInput.value.trim(), id_card: idCardInput.value.trim() || null };
+    result = await supabase.auth.signUp({ email, password, options: { data: profilePayload } });
     if (!result.error && result.data.user && result.data.session) {
-      await supabase.from('users').upsert({ id: result.data.user.id, name, email }, { onConflict: 'id' });
+      const { error: profileError } = await supabase.from('users').upsert({ id: result.data.user.id, ...profilePayload }, { onConflict: 'id' });
+      if (profileError) {
+        authSubmit.disabled = false;
+        showMessage(`Account created, but profile could not be saved: ${profileError.message}`, true);
+        return;
+      }
     }
   } else {
     result = await supabase.auth.signInWithPassword({ email, password });
