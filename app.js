@@ -14,7 +14,7 @@ function renderTransactions(filter = '') {
   rows.innerHTML = filtered.length
     ? filtered.map((transaction) => `<tr class="transition hover:bg-slate-50"><td class="px-6 py-4"><div class="flex items-center gap-3"><span class="grid h-9 w-9 place-items-center rounded-lg ${transaction.color}"><i data-lucide="${transaction.icon}" class="h-4 w-4"></i></span><span class="text-sm font-semibold">${transaction.name}</span></div></td><td class="px-4 py-4 text-xs font-medium text-slate-500">${transaction.category}</td><td class="px-4 py-4 text-xs text-slate-400">${transaction.date}</td><td class="px-6 py-4 text-right text-sm font-bold ${transaction.type === 'income' ? 'text-emerald-600' : 'text-ink'}">${transaction.amount}</td></tr>`).join('')
     : '<tr><td colspan="4" class="px-6 py-10 text-center text-sm text-slate-400">No transactions found.</td></tr>';
-  lucide.createIcons();
+  if (window.lucide) lucide.createIcons();
 }
 
 function setSidebar(open) {
@@ -45,4 +45,4 @@ document.querySelector('#profileButton').addEventListener('click', (event) => {
 });
 
 renderTransactions();
-lucide.createIcons();
+if (window.lucide) lucide.createIcons();
