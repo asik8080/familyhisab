@@ -18,8 +18,17 @@ const expenseSubmit = document.querySelector('#expenseSubmit');
 const expensesTableBody = document.querySelector('#expensesTableBody');
 const expensesEmpty = document.querySelector('#expensesEmpty');
 const expenseDate = document.querySelector('#expenseDate');
+const profileButton = document.querySelector('#profileButton');
+const profileDropdown = document.querySelector('#profileDropdown');
+const profileModal = document.querySelector('#profileModal');
+const profileForm = document.querySelector('#profileForm');
+const profileMessage = document.querySelector('#profileMessage');
+const saveProfileButton = document.querySelector('#saveProfileButton');
+const profileAvatarPreview = document.querySelector('#profileAvatarPreview');
+const avatarInput = document.querySelector('#avatarInput');
 let authMode = 'signIn';
 let currentUser = null;
+let currentProfile = null;
 let expensesChannel = null;
 
 function formatCurrency(amount) {
@@ -33,6 +42,64 @@ function escapeHtml(value) {
 function showExpenseMessage(message, isError = false) {
   expenseMessage.textContent = message;
   expenseMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
+}
+
+function getInitials(name) {
+  return (name || 'User').trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+}
+
+function updateProfileUI(profile) {
+  const displayName = profile.name || currentUser?.user_metadata?.name || 'Family member';
+  const email = profile.email || currentUser?.email || '';
+  const initials = getInitials(displayName);
+  const avatarImage = profile.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="${escapeHtml(displayName)}" class="h-full w-full object-cover">` : initials;
+  const headerAvatar = profileButton.children[0];
+  headerAvatar.innerHTML = avatarImage;
+  headerAvatar.className = 'grid h-8 w-8 place-items-center overflow-hidden rounded-lg bg-[#e6d8ca] text-xs font-bold text-[#674a39]';
+  profileButton.children[1].querySelector('span:first-child').textContent = displayName;
+  document.querySelector('#dropdownName').textContent = displayName;
+  document.querySelector('#dropdownEmail').textContent = email;
+  profileAvatarPreview.innerHTML = profile.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="${escapeHtml(displayName)}" class="h-full w-full object-cover">` : initials;
+  document.querySelector('#profileNameInput').value = displayName;
+  document.querySelector('#profilePhoneInput').value = profile.phone || '';
+  document.querySelector('#profileEmailInput').value = email;
+}
+
+async function loadProfile() {
+  if (!currentUser) return;
+  const { data, error } = await supabase.from('users').select('id, name, email, phone, avatar_url').eq('id', currentUser.id).maybeSingle();
+  if (error) {
+    showProfileMessage(error.message, true);
+    return;
+  }
+  if (data) {
+    currentProfile = data;
+  } else {
+    currentProfile = { id: currentUser.id, name: currentUser.user_metadata?.name || '', email: currentUser.email || '', phone: '', avatar_url: '' };
+    const { error: profileInsertError } = await supabase.from('users').upsert(currentProfile, { onConflict: 'id' });
+    if (profileInsertError) showProfileMessage(profileInsertError.message, true);
+  }
+  updateProfileUI(currentProfile);
+}
+
+function showProfileMessage(message, isError = false) {
+  profileMessage.textContent = message;
+  profileMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
+}
+
+function setProfileModal(isOpen) {
+  profileModal.classList.toggle('hidden', !isOpen);
+  profileModal.classList.toggle('flex', isOpen);
+  if (isOpen) profileDropdown.classList.add('hidden');
+}
+
+async function uploadAvatar(file) {
+  if (!currentUser || !file) return null;
+  const extension = file.name.split('.').pop().toLowerCase();
+  const path = `${currentUser.id}/${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type, cacheControl: '3600' });
+  if (error) throw error;
+  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl;
 }
 
 function renderExpenses(expenses) {
@@ -100,6 +167,7 @@ async function showDashboard(isVisible, user = currentUser) {
   if (isVisible) {
     currentUser = user;
     expenseDate.value = new Date().toISOString().slice(0, 10);
+    await loadProfile();
     await loadExpenses();
     subscribeToExpenses();
   } else {
@@ -170,6 +238,71 @@ document.querySelector('#logoutButton').addEventListener('click', async () => {
   showDashboard(false);
 });
 
+profileButton.addEventListener('click', (event) => {
+  event.stopPropagation();
+  profileDropdown.classList.toggle('hidden');
+  profileButton.setAttribute('aria-expanded', String(!profileDropdown.classList.contains('hidden')));
+});
+
+document.querySelector('#openProfileButton').addEventListener('click', () => setProfileModal(true));
+document.querySelector('#closeProfileModal').addEventListener('click', () => setProfileModal(false));
+document.querySelector('#cancelProfileButton').addEventListener('click', () => setProfileModal(false));
+profileModal.addEventListener('click', (event) => {
+  if (event.target === profileModal) setProfileModal(false);
+});
+document.addEventListener('click', (event) => {
+  if (!profileDropdown.contains(event.target) && !profileButton.contains(event.target)) {
+    profileDropdown.classList.add('hidden');
+    profileButton.setAttribute('aria-expanded', 'false');
+  }
+});
+
+document.querySelector('#dropdownLogoutButton').addEventListener('click', async () => {
+  await supabase.auth.signOut();
+  currentUser = null;
+  profileDropdown.classList.add('hidden');
+  showDashboard(false);
+});
+
+avatarInput.addEventListener('change', async () => {
+  const file = avatarInput.files[0];
+  if (!file) return;
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    showProfileMessage('Please choose a PNG, JPG, or WEBP image.', true);
+    return;
+  }
+  try {
+    showProfileMessage('Uploading avatar...');
+    const avatarUrl = await uploadAvatar(file);
+    const { error } = await supabase.from('users').upsert({ id: currentUser.id, name: currentProfile.name || currentUser.user_metadata?.name || 'Family member', email: currentUser.email, phone: currentProfile.phone || '', avatar_url: avatarUrl }, { onConflict: 'id' });
+    if (error) throw error;
+    currentProfile = { ...currentProfile, avatar_url: avatarUrl };
+    updateProfileUI(currentProfile);
+    showProfileMessage('Avatar updated.');
+  } catch (error) {
+    showProfileMessage(error.message, true);
+  } finally {
+    avatarInput.value = '';
+  }
+});
+
+profileForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  saveProfileButton.disabled = true;
+  profileMessage.classList.add('hidden');
+  const name = document.querySelector('#profileNameInput').value.trim();
+  const phone = document.querySelector('#profilePhoneInput').value.trim();
+  const { data, error } = await supabase.from('users').upsert({ id: currentUser.id, name, email: currentUser.email, phone, avatar_url: currentProfile?.avatar_url || null }, { onConflict: 'id' }).select('id, name, email, phone, avatar_url').single();
+  saveProfileButton.disabled = false;
+  if (error) {
+    showProfileMessage(error.message, true);
+    return;
+  }
+  currentProfile = data;
+  updateProfileUI(currentProfile);
+  showProfileMessage('Profile saved successfully.');
+});
+
 supabase.auth.getSession().then(({ data: { session } }) => {
   currentUser = session?.user || null;
   return showDashboard(Boolean(session), currentUser);
@@ -198,11 +331,6 @@ document.querySelectorAll('.nav-item').forEach((item) => {
     item.classList.remove('text-slate-500');
     setSidebar(false);
   });
-});
-
-document.querySelector('#profileButton').addEventListener('click', (event) => {
-  event.currentTarget.classList.toggle('bg-white');
-  event.currentTarget.setAttribute('aria-expanded', event.currentTarget.getAttribute('aria-expanded') !== 'true');
 });
 
 if (window.lucide) lucide.createIcons();
