@@ -198,6 +198,17 @@ function showIncomeMessage(message, isError = false) {
   incomeMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
 }
 
+function setupIncomeTableForm() {
+  incomeForm.className = 'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft';
+  incomeForm.parentElement.className = 'mt-7 space-y-5';
+  const fields = incomeForm.querySelector('.mt-6.space-y-4');
+  fields.className = 'grid gap-3 border-t border-slate-200 px-5 py-5 sm:grid-cols-[2fr_1fr_1fr_2fr_auto] sm:items-end';
+  fields.querySelector('.grid.gap-4').className = 'contents';
+  incomeForm.querySelector('#incomeMessage').classList.add('sm:col-span-4');
+}
+
+setupIncomeTableForm();
+
 function showIncomeTypeMessage(message, isError = false) {
   incomeTypeMessage.textContent = message;
   incomeTypeMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
@@ -208,6 +219,15 @@ async function loadIncomeTypes() {
   const { data, error } = await supabase.from('income_categories').select('id, name, description').eq('user_id', currentUser.id).eq('is_deleted', false).order('name');
   if (error) { showIncomeTypeMessage(error.message, true); return; }
   incomeTypes = data || [];
+  const incomeSource = document.querySelector('#incomeSource');
+  if (incomeSource?.tagName === 'INPUT') {
+    const incomeTypeSelect = document.createElement('select');
+    incomeTypeSelect.id = 'incomeSource';
+    incomeTypeSelect.required = true;
+    incomeTypeSelect.className = incomeSource.className;
+    incomeSource.replaceWith(incomeTypeSelect);
+  }
+  if (incomeSource || document.querySelector('#incomeSource')) document.querySelector('#incomeSource').innerHTML = `<option value="">Choose an income type</option>${incomeTypes.map((type) => `<option value="${escapeHtml(type.name)}">${escapeHtml(type.name)}</option>`).join('')}`;
   incomeTypesTableBody.innerHTML = incomeTypes.map((type) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4 text-sm font-semibold text-slate-800">${escapeHtml(type.name)}</td><td class="px-5 py-4 text-sm text-slate-500">${escapeHtml(type.description || 'No description')}</td><td class="px-5 py-4 text-right"><button type="button" data-delete-income-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete ${escapeHtml(type.name)}"><i data-lucide="trash-2" class="h-4 w-4"></i></button></td></tr>`).join('');
   incomeTypesEmpty.classList.toggle('hidden', incomeTypes.length > 0);
   incomeTypesTableBody.querySelectorAll('[data-delete-income-type]').forEach((button) => button.addEventListener('click', async () => {
@@ -272,7 +292,7 @@ function setAppView(view) {
   expenseTypesView.classList.toggle('hidden', view !== 'types');
   if (view === 'memo' && !memoRows.children.length) addMemoRow();
   if (view === 'types') loadExpenseTypes();
-  if (view === 'income-types') loadIncomeTypes();
+  if (view === 'income-types' || view === 'income') loadIncomeTypes();
   if (view === 'income' || view === 'deleted-income') loadIncomes(view === 'deleted-income');
   if (view === 'all' || view === 'deleted') loadAllExpenses(view === 'deleted');
 }
