@@ -492,9 +492,40 @@ function setSidebar(open) {
   document.querySelector('#mobileOverlay').classList.toggle('hidden', !open);
 }
 
+const expensesToggle = document.querySelector('#expensesToggle');
+const expensesSubmenu = document.querySelector('#expensesSubmenu');
+const expensesChevron = expensesToggle.querySelector('.expenses-chevron');
+const expenseLinks = document.querySelectorAll('.expense-subitem');
+
+function setExpensesExpanded(isExpanded) {
+  expensesToggle.setAttribute('aria-expanded', String(isExpanded));
+  expensesSubmenu.classList.toggle('grid-rows-[1fr]', isExpanded);
+  expensesSubmenu.classList.toggle('grid-rows-[0fr]', !isExpanded);
+  expensesChevron.classList.toggle('rotate-180', isExpanded);
+}
+
+function setActiveExpenseLink(activeLink) {
+  expenseLinks.forEach((link) => {
+    const isActive = link === activeLink;
+    link.classList.toggle('bg-slate-100', isActive);
+    link.classList.toggle('font-semibold', isActive);
+    link.classList.toggle('text-slate-900', isActive);
+    link.classList.toggle('text-slate-600', !isActive);
+    link.querySelector('.active-indicator').classList.toggle('opacity-0', !isActive);
+  });
+}
+
 document.querySelector('#openSidebar').addEventListener('click', () => setSidebar(true));
 document.querySelector('#closeSidebar').addEventListener('click', () => setSidebar(false));
 document.querySelector('#mobileOverlay').addEventListener('click', () => setSidebar(false));
+expensesToggle.addEventListener('click', () => setExpensesExpanded(expensesToggle.getAttribute('aria-expanded') !== 'true'));
+expenseLinks.forEach((link) => {
+  link.addEventListener('click', () => {
+    setActiveExpenseLink(link);
+    setExpensesExpanded(true);
+    setSidebar(false);
+  });
+});
 document.querySelectorAll('.nav-item').forEach((item) => {
   item.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach((navItem) => {

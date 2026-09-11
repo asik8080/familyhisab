@@ -73,7 +73,23 @@
       <div class="mt-12 px-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</div>
       <nav class="mt-4 space-y-1" aria-label="Primary navigation">
         <a href="#dashboard" data-nav="Dashboard" class="nav-item flex items-center gap-3 rounded-xl bg-navy px-3 py-3 text-sm font-semibold text-white shadow-lg shadow-navy/10 transition hover:-translate-y-0.5"><i data-lucide="layout-dashboard" class="h-[18px] w-[18px]"></i><span>Dashboard</span></a>
-        <a href="#expense" data-nav="Expense" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-ink"><i data-lucide="arrow-down-left" class="h-[18px] w-[18px]"></i><span>Expense</span></a>
+        <div class="space-y-1">
+          <button id="expensesToggle" type="button" aria-expanded="true" aria-controls="expensesSubmenu" class="group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+            <i data-lucide="receipt" class="h-[18px] w-[18px] shrink-0"></i>
+            <span class="flex-1">Expenses</span>
+            <i data-lucide="chevron-down" class="expenses-chevron h-4 w-4 shrink-0 transition-transform duration-300" aria-hidden="true"></i>
+          </button>
+          <div id="expensesSubmenu" class="grid grid-rows-[1fr] transition-[grid-template-rows] duration-300 ease-in-out" role="region" aria-label="Expenses submenu">
+            <div class="min-h-0 overflow-hidden pl-4">
+              <div class="border-l border-slate-200 pl-3">
+                <a href="#expense/add" data-expense-link="add" class="expense-subitem relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><i data-lucide="plus" class="h-4 w-4 shrink-0"></i><span>Add Expense</span><span class="active-indicator absolute -left-[17px] h-5 w-0.5 rounded-full bg-slate-900 opacity-0 transition-opacity" aria-hidden="true"></span></a>
+                <a href="#expenses" data-expense-link="all" class="expense-subitem relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><i data-lucide="clipboard-list" class="h-4 w-4 shrink-0"></i><span>All Expenses</span><span class="active-indicator absolute -left-[17px] h-5 w-0.5 rounded-full bg-slate-900 opacity-0 transition-opacity" aria-hidden="true"></span></a>
+                <a href="#expense-types" data-expense-link="types" class="expense-subitem relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><i data-lucide="tags" class="h-4 w-4 shrink-0"></i><span>Expense Types</span><span class="active-indicator absolute -left-[17px] h-5 w-0.5 rounded-full bg-slate-900 opacity-0 transition-opacity" aria-hidden="true"></span></a>
+                <a href="#deleted-expenses" data-expense-link="deleted" class="expense-subitem relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"><i data-lucide="trash-2" class="h-4 w-4 shrink-0"></i><span>Deleted Expenses</span><span class="active-indicator absolute -left-[17px] h-5 w-0.5 rounded-full bg-slate-900 opacity-0 transition-opacity" aria-hidden="true"></span></a>
+              </div>
+            </div>
+          </div>
+        </div>
         <a href="#income" data-nav="Income" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-ink"><i data-lucide="arrow-up-right" class="h-[18px] w-[18px]"></i><span>Income</span></a>
         <a href="#reports" data-nav="Reports" class="nav-item flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-ink"><i data-lucide="chart-no-axes-combined" class="h-[18px] w-[18px]"></i><span>Reports</span></a>
       </nav>
