@@ -755,7 +755,10 @@ expenseMemoForm.addEventListener('submit', async (event) => {
   saveButton.disabled = true;
   const { error } = editingExpenseId
     ? await supabase.from('expenses').update({ ...rows[0], total_amount: rows[0].quantity * rows[0].unit_price }).eq('id', editingExpenseId).eq('user_id', currentUser.id)
-    : await supabase.from('expenses').insert(rows.map((row) => ({ ...row, user_id: currentUser.id, expense_date: expenseMemoDate.value, total_amount: row.quantity * row.unit_price, is_deleted: false })));
+    : await supabase.from('expenses').insert(rows.map((row) => {
+      const totalAmount = row.quantity * row.unit_price;
+      return { ...row, user_id: currentUser.id, title: row.item_name, amount: totalAmount, category: row.expense_type, expense_date: expenseMemoDate.value, total_amount: totalAmount, is_deleted: false };
+    }));
   saveButton.disabled = false;
   if (error) return showToast(error.message, true);
   showToast('Invoice saved successfully!');
