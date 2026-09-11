@@ -610,7 +610,8 @@ expenseForm.addEventListener('submit', async (event) => {
   await loadExpenses();
 });
 
-document.querySelector('#logoutButton').addEventListener('click', async () => {
+const logoutButton = document.querySelector('#logoutButton');
+if (logoutButton) logoutButton.addEventListener('click', async () => {
   await supabase.auth.signOut();
   currentUser = null;
   showDashboard(false);
