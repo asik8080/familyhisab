@@ -91,7 +91,15 @@ const incomeSubmit = document.querySelector('#incomeSubmit');
 const incomeTableBody = document.querySelector('#incomeTableBody');
 const incomeEmpty = document.querySelector('#incomeEmpty');
 const incomeDate = document.querySelector('#incomeDate');
+const incomeTypesView = document.querySelector('#incomeTypesView');
+const incomeTypeForm = document.querySelector('#incomeTypeForm');
+const incomeTypeName = document.querySelector('#incomeTypeName');
+const incomeTypeDescription = document.querySelector('#incomeTypeDescription');
+const incomeTypeMessage = document.querySelector('#incomeTypeMessage');
+const incomeTypesTableBody = document.querySelector('#incomeTypesTableBody');
+const incomeTypesEmpty = document.querySelector('#incomeTypesEmpty');
 let incomes = [];
+let incomeTypes = [];
 let showingDeletedIncomes = false;
 const allExpensesView = document.querySelector('#allExpensesView');
 const allExpensesTableBody = document.querySelector('#allExpensesTableBody');
@@ -190,6 +198,26 @@ function showIncomeMessage(message, isError = false) {
   incomeMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
 }
 
+function showIncomeTypeMessage(message, isError = false) {
+  incomeTypeMessage.textContent = message;
+  incomeTypeMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
+}
+
+async function loadIncomeTypes() {
+  if (!currentUser) return;
+  const { data, error } = await supabase.from('income_categories').select('id, name, description').eq('user_id', currentUser.id).eq('is_deleted', false).order('name');
+  if (error) { showIncomeTypeMessage(error.message, true); return; }
+  incomeTypes = data || [];
+  incomeTypesTableBody.innerHTML = incomeTypes.map((type) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4 text-sm font-semibold text-slate-800">${escapeHtml(type.name)}</td><td class="px-5 py-4 text-sm text-slate-500">${escapeHtml(type.description || 'No description')}</td><td class="px-5 py-4 text-right"><button type="button" data-delete-income-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete ${escapeHtml(type.name)}"><i data-lucide="trash-2" class="h-4 w-4"></i></button></td></tr>`).join('');
+  incomeTypesEmpty.classList.toggle('hidden', incomeTypes.length > 0);
+  incomeTypesTableBody.querySelectorAll('[data-delete-income-type]').forEach((button) => button.addEventListener('click', async () => {
+    const { error: deleteError } = await supabase.from('income_categories').update({ is_deleted: true }).eq('id', button.dataset.deleteIncomeType).eq('user_id', currentUser.id);
+    if (deleteError) showIncomeTypeMessage(deleteError.message, true);
+    else loadIncomeTypes();
+  }));
+  if (window.lucide) lucide.createIcons();
+}
+
 function renderIncomes() {
   const monthPrefix = new Date().toISOString().slice(0, 7);
   const total = incomes.reduce((sum, income) => sum + Number(income.amount), 0);
@@ -237,12 +265,14 @@ function setAppView(view) {
   showingDeletedExpenses = view === 'deleted';
   showingDeletedIncomes = view === 'deleted-income';
   dashboardMain.classList.toggle('hidden', view !== 'dashboard');
+  incomeTypesView.classList.toggle('hidden', view !== 'income-types');
   incomeView.classList.toggle('hidden', view !== 'income' && view !== 'deleted-income');
   expenseMemoView.classList.toggle('hidden', view !== 'memo');
   allExpensesView.classList.toggle('hidden', view !== 'all' && view !== 'deleted');
   expenseTypesView.classList.toggle('hidden', view !== 'types');
   if (view === 'memo' && !memoRows.children.length) addMemoRow();
   if (view === 'types') loadExpenseTypes();
+  if (view === 'income-types') loadIncomeTypes();
   if (view === 'income' || view === 'deleted-income') loadIncomes(view === 'deleted-income');
   if (view === 'all' || view === 'deleted') loadAllExpenses(view === 'deleted');
 }
@@ -515,7 +545,7 @@ async function showDashboard(isVisible, user = currentUser) {
     await loadExpenses();
     subscribeToExpenses();
     const route = window.location.hash;
-    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#deleted-income' ? 'deleted-income' : route === '#income/add' || route === '#income/all' || route === '#income' ? 'income' : 'dashboard');
+    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/add' || route === '#income/all' || route === '#income' ? 'income' : 'dashboard');
   } else {
     unsubscribeFromExpenses();
   }
@@ -823,7 +853,7 @@ incomeLinks.forEach((link) => {
   link.addEventListener('click', () => {
     setActiveIncomeLink(link);
     setIncomeExpanded(true);
-    const view = link.dataset.incomeLink === 'deleted' ? 'deleted-income' : 'income';
+    const view = link.dataset.incomeLink === 'types' ? 'income-types' : link.dataset.incomeLink === 'deleted' ? 'deleted-income' : 'income';
     window.location.hash = link.getAttribute('href');
     setAppView(view);
     setSidebar(false);
@@ -865,6 +895,7 @@ expenseTypeForm.addEventListener('submit', async (event) => {
   closeExpenseTypeModal();
 });
 document.querySelector('#addMemoRow').addEventListener('click', () => addMemoRow());
+document.querySelector('#addIncomeTypeButton').addEventListener('click', () => incomeTypeName.focus());
 document.querySelector('#memoBackButton').addEventListener('click', () => { window.location.hash = '#dashboard'; setAppView('dashboard'); });
 document.querySelector('#newExpenseButton').addEventListener('click', () => { window.location.hash = '#expense/add'; setAppView('memo'); });
 incomeForm.addEventListener('submit', async (event) => {
@@ -886,6 +917,17 @@ incomeForm.addEventListener('submit', async (event) => {
   incomeDate.value = new Date().toISOString().slice(0, 10);
   await loadIncomes();
   showToast('Income saved successfully.');
+});
+incomeTypeForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!currentUser) return;
+  const name = incomeTypeName.value.trim();
+  if (!name) return;
+  const { error } = await supabase.from('income_categories').insert({ user_id: currentUser.id, name, description: incomeTypeDescription.value.trim() || null, is_deleted: false });
+  if (error) { showIncomeTypeMessage(error.message, true); return; }
+  incomeTypeForm.reset();
+  await loadIncomeTypes();
+  showToast('Income type added successfully.');
 });
 expenseMemoForm.addEventListener('submit', async (event) => {
   event.preventDefault();
