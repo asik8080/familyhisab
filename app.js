@@ -358,7 +358,7 @@ function renderExpenses(expenses) {
 
 async function loadExpenses() {
   if (!currentUser) return;
-  const { data, error } = await supabase.from('expenses').select('id, title, amount, category, expense_date, created_at').eq('user_id', currentUser.id).order('expense_date', { ascending: false }).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('expenses').select('id, title, amount, category, expense_date, created_at').eq('user_id', currentUser.id).eq('is_deleted', false).order('expense_date', { ascending: false }).order('created_at', { ascending: false });
   if (error) {
     showExpenseMessage(error.message, true);
     return;
@@ -703,7 +703,7 @@ expenseLinks.forEach((link) => {
   link.addEventListener('click', () => {
     setActiveExpenseLink(link);
     setExpensesExpanded(true);
-    const view = link.dataset.expenseLink === 'types' ? 'types' : link.dataset.expenseLink === 'all' ? 'all' : link.dataset.expenseLink === 'add' ? 'memo' : 'dashboard';
+    const view = link.dataset.expenseLink === 'types' ? 'types' : link.dataset.expenseLink === 'all' ? 'all' : link.dataset.expenseLink === 'deleted' ? 'deleted' : link.dataset.expenseLink === 'add' ? 'memo' : 'dashboard';
     window.location.hash = link.getAttribute('href');
     setAppView(view);
     setSidebar(false);
@@ -751,13 +751,16 @@ expenseMemoForm.addEventListener('submit', async (event) => {
   if (rows.some((row) => !row.item_name || !row.expense_type || !row.unit || !Number.isFinite(row.quantity) || row.quantity <= 0 || !Number.isFinite(row.unit_price) || row.unit_price <= 0)) return showToast('Please complete every item with a valid name, quantity, unit, and price.', true);
   const saveButton = document.querySelector('#saveInvoiceButton');
   saveButton.disabled = true;
-  const { error } = await supabase.from('expenses').insert(rows.map((row) => ({ ...row, family_id: currentUser.id, user_id: currentUser.id, total_amount: row.quantity * row.unit_price, is_deleted: false })));
+  const { error } = editingExpenseId
+    ? await supabase.from('expenses').update({ ...rows[0], total_amount: rows[0].quantity * rows[0].unit_price }).eq('id', editingExpenseId).eq('user_id', currentUser.id)
+    : await supabase.from('expenses').insert(rows.map((row) => ({ ...row, family_id: currentUser.id, user_id: currentUser.id, total_amount: row.quantity * row.unit_price, is_deleted: false })));
   saveButton.disabled = false;
   if (error) return showToast(error.message, true);
   showToast('Invoice saved successfully!');
   expenseMemoForm.reset();
   memoRows.innerHTML = '';
   addMemoRow();
+  editingExpenseId = null;
   window.location.hash = '#expenses/all';
   setAppView('all');
 });
