@@ -270,8 +270,10 @@ async function softDeleteExpense(expenseId) {
   const previous = allExpenses;
   allExpenses = allExpenses.filter((expense) => expense.id !== expenseId);
   renderAllExpenses();
-  const { data, error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', expenseId).eq('user_id', currentUser.id).select('id').maybeSingle();
-  if (error || !data) { allExpenses = previous; renderAllExpenses(); showToast(error?.message || 'Expense could not be deleted.', true); return; }
+  const { error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', expenseId).eq('user_id', currentUser.id);
+  if (error) { allExpenses = previous; renderAllExpenses(); showToast(error.message, true); return; }
+  const { data: deletedExpense, error: verifyError } = await supabase.from('expenses').select('id').eq('id', expenseId).eq('user_id', currentUser.id).eq('is_deleted', true).maybeSingle();
+  if (verifyError || !deletedExpense) { allExpenses = previous; renderAllExpenses(); showToast(verifyError?.message || 'Expense could not be deleted.', true); return; }
   showToast('Expense moved to Deleted Expenses.');
   window.location.hash = '#deleted-expenses';
   setAppView('deleted');
@@ -281,8 +283,8 @@ async function restoreExpense(expenseId) {
   const previous = allExpenses;
   allExpenses = allExpenses.filter((expense) => expense.id !== expenseId);
   renderAllExpenses();
-  const { data, error } = await supabase.from('expenses').update({ is_deleted: false }).eq('id', expenseId).eq('user_id', currentUser.id).select('id').maybeSingle();
-  if (error || !data) { allExpenses = previous; renderAllExpenses(); showToast(error?.message || 'Expense could not be restored.', true); return; }
+  const { error } = await supabase.from('expenses').update({ is_deleted: false }).eq('id', expenseId).eq('user_id', currentUser.id);
+  if (error) { allExpenses = previous; renderAllExpenses(); showToast(error.message, true); return; }
   showToast('Expense restored successfully.');
 }
 
