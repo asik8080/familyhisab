@@ -68,11 +68,27 @@ const maritalStatusInput = document.querySelector('#maritalStatusInput');
 const nationalityInput = document.querySelector('#nationalityInput');
 const idCardInput = document.querySelector('#idCardInput');
 const signupConfirmPasswordInput = document.querySelector('#signupConfirmPasswordInput');
+const dashboardMain = document.querySelector('#dashboardMain');
+const expenseTypesView = document.querySelector('#expenseTypesView');
+const expenseTypeModal = document.querySelector('#expenseTypeModal');
+const expenseTypeForm = document.querySelector('#expenseTypeForm');
+const expenseTypeName = document.querySelector('#expenseTypeName');
+const expenseTypeDescription = document.querySelector('#expenseTypeDescription');
+const expenseTypeSearch = document.querySelector('#expenseTypeSearch');
+const expenseTypesTableBody = document.querySelector('#expenseTypesTableBody');
+const expenseTypesEmpty = document.querySelector('#expenseTypesEmpty');
+const expenseTypeModalTitle = document.querySelector('#expenseTypeModalTitle');
 let authMode = 'signIn';
 let currentUser = null;
 let currentProfile = null;
 let expensesChannel = null;
 let resetStep = 'requestCode';
+let editingExpenseTypeId = null;
+let expenseTypes = JSON.parse(localStorage.getItem('familyhisab:expense-types') || 'null') || [
+  { id: 'ET-001', name: 'Groceries', description: 'Daily household food and market expenses.', deleted: false },
+  { id: 'ET-002', name: 'Mobile Bill', description: 'Monthly mobile recharge and phone bills.', deleted: false },
+  { id: 'ET-003', name: 'Transportation', description: 'Bus, rideshare, fuel, and travel costs.', deleted: false },
+];
 
 function formatCurrency(amount) {
   return `BDT ${Number(amount || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -80,6 +96,51 @@ function formatCurrency(amount) {
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
+}
+
+function saveExpenseTypes() {
+  localStorage.setItem('familyhisab:expense-types', JSON.stringify(expenseTypes));
+}
+
+function renderExpenseTypes() {
+  const query = expenseTypeSearch.value.trim().toLowerCase();
+  const visibleTypes = expenseTypes.filter((type) => !type.deleted && `${type.name} ${type.description}`.toLowerCase().includes(query));
+  expenseTypesTableBody.innerHTML = visibleTypes.map((type) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4 text-xs font-semibold text-slate-500">${escapeHtml(type.id)}</td><td class="px-5 py-4 text-sm font-semibold text-slate-800">${escapeHtml(type.name)}</td><td class="max-w-md px-5 py-4 text-sm text-slate-500">${escapeHtml(type.description || 'No description')}</td><td class="px-5 py-4 text-right"><div class="inline-flex items-center gap-1"><button type="button" data-edit-expense-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600" aria-label="Edit ${escapeHtml(type.name)}"><i data-lucide="pencil" class="h-4 w-4"></i></button><button type="button" data-delete-expense-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete ${escapeHtml(type.name)}"><i data-lucide="trash-2" class="h-4 w-4"></i></button></div></td></tr>`).join('');
+  expenseTypesEmpty.classList.toggle('hidden', visibleTypes.length > 0);
+  expenseTypesTableBody.querySelectorAll('[data-edit-expense-type]').forEach((button) => button.addEventListener('click', () => openExpenseTypeModal(button.dataset.editExpenseType)));
+  expenseTypesTableBody.querySelectorAll('[data-delete-expense-type]').forEach((button) => button.addEventListener('click', () => {
+    const type = expenseTypes.find((item) => item.id === button.dataset.deleteExpenseType);
+    if (!type || !window.confirm(`Move "${type.name}" to deleted expense types?`)) return;
+    type.deleted = true;
+    saveExpenseTypes();
+    renderExpenseTypes();
+  }));
+  if (window.lucide) lucide.createIcons();
+}
+
+function setExpenseTypesView(isVisible) {
+  dashboardMain.classList.toggle('hidden', isVisible);
+  expenseTypesView.classList.toggle('hidden', !isVisible);
+  if (isVisible) renderExpenseTypes();
+}
+
+function openExpenseTypeModal(typeId = null) {
+  editingExpenseTypeId = typeId;
+  const type = expenseTypes.find((item) => item.id === typeId);
+  expenseTypeModalTitle.textContent = type ? 'Edit Expense Type' : 'Add New Expense Type';
+  expenseTypeName.value = type?.name || '';
+  expenseTypeDescription.value = type?.description || '';
+  expenseTypeModal.classList.remove('hidden');
+  expenseTypeModal.classList.add('flex');
+  expenseTypeName.focus();
+}
+
+function closeExpenseTypeModal() {
+  expenseTypeModal.classList.add('hidden');
+  expenseTypeModal.classList.remove('flex');
+  expenseTypeForm.reset();
+  editingExpenseTypeId = null;
+  expenseTypeModalTitle.textContent = 'Add New Expense Type';
 }
 
 function showExpenseMessage(message, isError = false) {
@@ -523,8 +584,41 @@ expenseLinks.forEach((link) => {
   link.addEventListener('click', () => {
     setActiveExpenseLink(link);
     setExpensesExpanded(true);
+    setExpenseTypesView(link.dataset.expenseLink === 'types');
     setSidebar(false);
   });
+});
+document.querySelector('#expenseTypesBack').addEventListener('click', () => {
+  setExpenseTypesView(false);
+  window.location.hash = '#dashboard';
+});
+document.querySelector('#addExpenseTypeButton').addEventListener('click', () => openExpenseTypeModal());
+document.querySelector('#closeExpenseTypeModal').addEventListener('click', closeExpenseTypeModal);
+document.querySelector('#resetExpenseType').addEventListener('click', () => {
+  expenseTypeForm.reset();
+  expenseTypeName.focus();
+});
+expenseTypeModal.addEventListener('click', (event) => {
+  if (event.target === expenseTypeModal) closeExpenseTypeModal();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !expenseTypeModal.classList.contains('hidden')) closeExpenseTypeModal();
+});
+expenseTypeSearch.addEventListener('input', renderExpenseTypes);
+expenseTypeForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const name = expenseTypeName.value.trim();
+  const description = expenseTypeDescription.value.trim();
+  if (!name) return;
+  if (editingExpenseTypeId) {
+    const type = expenseTypes.find((item) => item.id === editingExpenseTypeId);
+    if (type) Object.assign(type, { name, description });
+  } else {
+    expenseTypes.push({ id: `ET-${String(expenseTypes.length + 1).padStart(3, '0')}`, name, description, deleted: false });
+  }
+  saveExpenseTypes();
+  renderExpenseTypes();
+  closeExpenseTypeModal();
 });
 document.querySelectorAll('.nav-item').forEach((item) => {
   item.addEventListener('click', () => {
@@ -534,6 +628,7 @@ document.querySelectorAll('.nav-item').forEach((item) => {
     });
     item.classList.add('bg-navy', 'text-white', 'shadow-lg', 'shadow-navy/10');
     item.classList.remove('text-slate-500');
+    setExpenseTypesView(false);
     setSidebar(false);
   });
 });
