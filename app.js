@@ -103,6 +103,7 @@ let editingExpenseTypeId = null;
 let allExpenses = [];
 let allExpensesPage = 1;
 let showingDeletedExpenses = false;
+let allExpensesLoadId = 0;
 let memoRowId = 0;
 let editingExpenseId = null;
 let expenseTypes = [];
@@ -256,8 +257,10 @@ function renderAllExpenses() {
 
 async function loadAllExpenses(includeDeleted = false) {
   if (!currentUser) return;
+  const loadId = ++allExpensesLoadId;
   const { data, error } = await supabase.from('expenses').select('id, expense_date, item_name, title, expense_type, category, unit, quantity, unit_price, total_amount, amount, note, user_id').eq('user_id', currentUser.id).eq('is_deleted', includeDeleted).order('expense_date', { ascending: false });
   if (error) { showToast(error.message, true); return; }
+  if (loadId !== allExpensesLoadId) return;
   allExpenses = data || [];
   allExpensesPage = 1;
   renderAllExpenses();
@@ -267,8 +270,8 @@ async function softDeleteExpense(expenseId) {
   const previous = allExpenses;
   allExpenses = allExpenses.filter((expense) => expense.id !== expenseId);
   renderAllExpenses();
-  const { error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', expenseId).eq('user_id', currentUser.id);
-  if (error) { allExpenses = previous; renderAllExpenses(); showToast(error.message, true); return; }
+  const { data, error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', expenseId).eq('user_id', currentUser.id).select('id').maybeSingle();
+  if (error || !data) { allExpenses = previous; renderAllExpenses(); showToast(error?.message || 'Expense could not be deleted.', true); return; }
   showToast('Expense moved to Deleted Expenses.');
   window.location.hash = '#deleted-expenses';
   setAppView('deleted');
@@ -278,8 +281,8 @@ async function restoreExpense(expenseId) {
   const previous = allExpenses;
   allExpenses = allExpenses.filter((expense) => expense.id !== expenseId);
   renderAllExpenses();
-  const { error } = await supabase.from('expenses').update({ is_deleted: false }).eq('id', expenseId).eq('user_id', currentUser.id);
-  if (error) { allExpenses = previous; renderAllExpenses(); showToast(error.message, true); return; }
+  const { data, error } = await supabase.from('expenses').update({ is_deleted: false }).eq('id', expenseId).eq('user_id', currentUser.id).select('id').maybeSingle();
+  if (error || !data) { allExpenses = previous; renderAllExpenses(); showToast(error?.message || 'Expense could not be restored.', true); return; }
   showToast('Expense restored successfully.');
 }
 
@@ -390,12 +393,7 @@ async function loadExpenses() {
 }
 
 async function deleteExpense(expenseId) {
-  const { error } = await supabase.from('expenses').delete().eq('id', expenseId).eq('user_id', currentUser.id);
-  if (error) {
-    showExpenseMessage(error.message, true);
-    return;
-  }
-  await loadExpenses();
+  await softDeleteExpense(expenseId);
 }
 
 function subscribeToExpenses() {
@@ -598,6 +596,7 @@ expenseForm.addEventListener('submit', async (event) => {
     amount: Number(document.querySelector('#expenseAmount').value),
     category: document.querySelector('#expenseCategory').value,
     expense_date: expenseDate.value,
+    is_deleted: false,
   });
   expenseSubmit.disabled = false;
   if (error) {
