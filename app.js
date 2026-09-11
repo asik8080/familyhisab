@@ -84,6 +84,15 @@ const expenseMemoView = document.querySelector('#expenseMemoView');
 const expenseMemoForm = document.querySelector('#expenseMemoForm');
 const memoRows = document.querySelector('#memoRows');
 const memoTotal = document.querySelector('#memoTotal');
+const incomeView = document.querySelector('#incomeView');
+const incomeForm = document.querySelector('#incomeForm');
+const incomeMessage = document.querySelector('#incomeMessage');
+const incomeSubmit = document.querySelector('#incomeSubmit');
+const incomeTableBody = document.querySelector('#incomeTableBody');
+const incomeEmpty = document.querySelector('#incomeEmpty');
+const incomeDate = document.querySelector('#incomeDate');
+let incomes = [];
+let showingDeletedIncomes = false;
 const allExpensesView = document.querySelector('#allExpensesView');
 const allExpensesTableBody = document.querySelector('#allExpensesTableBody');
 const allExpensesEmpty = document.querySelector('#allExpensesEmpty');
@@ -176,14 +185,65 @@ function showToast(message, isError = false) {
   setTimeout(() => toast.remove(), 3000);
 }
 
+function showIncomeMessage(message, isError = false) {
+  incomeMessage.textContent = message;
+  incomeMessage.className = `rounded-xl px-3 py-2 text-xs leading-5 ${isError ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`;
+}
+
+function renderIncomes() {
+  const monthPrefix = new Date().toISOString().slice(0, 7);
+  const total = incomes.reduce((sum, income) => sum + Number(income.amount), 0);
+  const monthlyTotal = incomes.filter((income) => income.income_date.startsWith(monthPrefix)).reduce((sum, income) => sum + Number(income.amount), 0);
+  document.querySelector('#incomeTotal').textContent = formatTaka(total);
+  document.querySelector('#incomeMonthlyTotal').textContent = formatTaka(monthlyTotal);
+  document.querySelector('#incomeCountLabel').textContent = `${incomes.length} ${incomes.length === 1 ? 'entry' : 'entries'}`;
+  incomeEmpty.classList.toggle('hidden', incomes.length > 0);
+  const incomeAction = showingDeletedIncomes
+    ? (income) => `<button type="button" data-restore-income="${escapeHtml(income.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-600" aria-label="Restore ${escapeHtml(income.source)}"><i data-lucide="undo-2" class="h-4 w-4"></i></button>`
+    : (income) => `<button type="button" data-delete-income="${escapeHtml(income.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete ${escapeHtml(income.source)}"><i data-lucide="trash-2" class="h-4 w-4"></i></button>`;
+  incomeTableBody.innerHTML = incomes.map((income) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4"><div class="flex flex-col gap-1"><p class="text-sm font-semibold text-slate-800">${escapeHtml(income.source)}</p>${income.note ? `<p class="text-xs font-normal text-slate-500">${escapeHtml(income.note)}</p>` : ''}</div></td><td class="px-5 py-4 text-sm text-slate-600">${new Date(`${income.income_date}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td><td class="px-5 py-4 text-right font-['Space_Grotesk'] text-sm font-bold text-emerald-700">${formatTaka(income.amount)}</td><td class="px-5 py-4 text-right">${incomeAction(income)}</td></tr>`).join('');
+  incomeTableBody.querySelectorAll('[data-delete-income]').forEach((button) => button.addEventListener('click', () => deleteIncome(button.dataset.deleteIncome)));
+  incomeTableBody.querySelectorAll('[data-restore-income]').forEach((button) => button.addEventListener('click', () => restoreIncome(button.dataset.restoreIncome)));
+  if (window.lucide) lucide.createIcons();
+}
+
+async function loadIncomes(includeDeleted = false) {
+  if (!currentUser) return;
+  const { data, error } = await supabase.from('incomes').select('id, source, amount, income_date, note').eq('user_id', currentUser.id).eq('is_deleted', includeDeleted).order('income_date', { ascending: false }).order('created_at', { ascending: false });
+  if (error) { showIncomeMessage(error.message, true); return; }
+  incomes = data || [];
+  renderIncomes();
+}
+
+async function deleteIncome(incomeId) {
+  const previous = incomes;
+  incomes = incomes.filter((income) => income.id !== incomeId);
+  renderIncomes();
+  const { error } = await supabase.from('incomes').update({ is_deleted: true }).eq('id', incomeId).eq('user_id', currentUser.id);
+  if (error) { incomes = previous; renderIncomes(); showIncomeMessage(error.message, true); return; }
+  showToast('Income deleted successfully.');
+}
+
+async function restoreIncome(incomeId) {
+  const previous = incomes;
+  incomes = incomes.filter((income) => income.id !== incomeId);
+  renderIncomes();
+  const { error } = await supabase.from('incomes').update({ is_deleted: false }).eq('id', incomeId).eq('user_id', currentUser.id);
+  if (error) { incomes = previous; renderIncomes(); showIncomeMessage(error.message, true); return; }
+  showToast('Income restored successfully.');
+}
+
 function setAppView(view) {
   showingDeletedExpenses = view === 'deleted';
+  showingDeletedIncomes = view === 'deleted-income';
   dashboardMain.classList.toggle('hidden', view !== 'dashboard');
+  incomeView.classList.toggle('hidden', view !== 'income' && view !== 'deleted-income');
   expenseMemoView.classList.toggle('hidden', view !== 'memo');
   allExpensesView.classList.toggle('hidden', view !== 'all' && view !== 'deleted');
   expenseTypesView.classList.toggle('hidden', view !== 'types');
   if (view === 'memo' && !memoRows.children.length) addMemoRow();
   if (view === 'types') loadExpenseTypes();
+  if (view === 'income' || view === 'deleted-income') loadIncomes(view === 'deleted-income');
   if (view === 'all' || view === 'deleted') loadAllExpenses(view === 'deleted');
 }
 
@@ -449,12 +509,13 @@ async function showDashboard(isVisible, user = currentUser) {
     currentUser = user;
     expenseDate.value = new Date().toISOString().slice(0, 10);
     expenseMemoDate.value = new Date().toISOString().slice(0, 10);
+    incomeDate.value = new Date().toISOString().slice(0, 10);
     await syncSignupProfile(currentUser);
     await loadProfile();
     await loadExpenses();
     subscribeToExpenses();
     const route = window.location.hash;
-    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : 'dashboard');
+    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#deleted-income' ? 'deleted-income' : route === '#income/add' || route === '#income/all' || route === '#income' ? 'income' : 'dashboard');
   } else {
     unsubscribeFromExpenses();
   }
@@ -702,6 +763,10 @@ const expensesToggle = document.querySelector('#expensesToggle');
 const expensesSubmenu = document.querySelector('#expensesSubmenu');
 const expensesChevron = expensesToggle.querySelector('.expenses-chevron');
 const expenseLinks = document.querySelectorAll('.expense-subitem');
+const incomeToggle = document.querySelector('#incomeToggle');
+const incomeSubmenu = document.querySelector('#incomeSubmenu');
+const incomeChevron = incomeToggle.querySelector('.income-chevron');
+const incomeLinks = document.querySelectorAll('.income-subitem');
 
 function setExpensesExpanded(isExpanded) {
   expensesToggle.setAttribute('aria-expanded', String(isExpanded));
@@ -721,10 +786,29 @@ function setActiveExpenseLink(activeLink) {
   });
 }
 
+function setIncomeExpanded(isExpanded) {
+  incomeToggle.setAttribute('aria-expanded', String(isExpanded));
+  incomeSubmenu.classList.toggle('grid-rows-[1fr]', isExpanded);
+  incomeSubmenu.classList.toggle('grid-rows-[0fr]', !isExpanded);
+  incomeChevron.classList.toggle('rotate-180', isExpanded);
+}
+
+function setActiveIncomeLink(activeLink) {
+  incomeLinks.forEach((link) => {
+    const isActive = link === activeLink;
+    link.classList.toggle('bg-slate-100', isActive);
+    link.classList.toggle('font-semibold', isActive);
+    link.classList.toggle('text-slate-900', isActive);
+    link.classList.toggle('text-slate-600', !isActive);
+    link.querySelector('.active-indicator').classList.toggle('opacity-0', !isActive);
+  });
+}
+
 document.querySelector('#openSidebar').addEventListener('click', () => setSidebar(true));
 document.querySelector('#closeSidebar').addEventListener('click', () => setSidebar(false));
 document.querySelector('#mobileOverlay').addEventListener('click', () => setSidebar(false));
 expensesToggle.addEventListener('click', () => setExpensesExpanded(expensesToggle.getAttribute('aria-expanded') !== 'true'));
+incomeToggle.addEventListener('click', () => setIncomeExpanded(incomeToggle.getAttribute('aria-expanded') !== 'true'));
 expenseLinks.forEach((link) => {
   link.addEventListener('click', () => {
     setActiveExpenseLink(link);
@@ -733,6 +817,17 @@ expenseLinks.forEach((link) => {
     window.location.hash = link.getAttribute('href');
     setAppView(view);
     setSidebar(false);
+  });
+});
+incomeLinks.forEach((link) => {
+  link.addEventListener('click', () => {
+    setActiveIncomeLink(link);
+    setIncomeExpanded(true);
+    const view = link.dataset.incomeLink === 'deleted' ? 'deleted-income' : 'income';
+    window.location.hash = link.getAttribute('href');
+    setAppView(view);
+    setSidebar(false);
+    if (link.dataset.incomeLink === 'add') document.querySelector('#incomeSource').focus();
   });
 });
 document.querySelector('#expenseTypesBack').addEventListener('click', () => {
@@ -772,6 +867,26 @@ expenseTypeForm.addEventListener('submit', async (event) => {
 document.querySelector('#addMemoRow').addEventListener('click', () => addMemoRow());
 document.querySelector('#memoBackButton').addEventListener('click', () => { window.location.hash = '#dashboard'; setAppView('dashboard'); });
 document.querySelector('#newExpenseButton').addEventListener('click', () => { window.location.hash = '#expense/add'; setAppView('memo'); });
+incomeForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!currentUser) return;
+  incomeSubmit.disabled = true;
+  incomeMessage.classList.add('hidden');
+  const { error } = await supabase.from('incomes').insert({
+    user_id: currentUser.id,
+    source: document.querySelector('#incomeSource').value.trim(),
+    amount: Number(document.querySelector('#incomeAmount').value),
+    income_date: incomeDate.value,
+    note: document.querySelector('#incomeNote').value.trim() || null,
+    is_deleted: false,
+  });
+  incomeSubmit.disabled = false;
+  if (error) { showIncomeMessage(error.message, true); return; }
+  incomeForm.reset();
+  incomeDate.value = new Date().toISOString().slice(0, 10);
+  await loadIncomes();
+  showToast('Income saved successfully.');
+});
 expenseMemoForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!currentUser) return showToast('Please sign in before saving an invoice.', true);
@@ -815,7 +930,7 @@ document.querySelectorAll('.nav-item').forEach((item) => {
     });
     item.classList.add('bg-navy', 'text-white', 'shadow-lg', 'shadow-navy/10');
     item.classList.remove('text-slate-500');
-    setAppView('dashboard');
+    setAppView(item.dataset.nav === 'Income' ? 'income' : 'dashboard');
     setSidebar(false);
   });
 });
