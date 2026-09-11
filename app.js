@@ -73,6 +73,7 @@ const dashboardMain = document.querySelector('#dashboardMain');
 const expenseTypesView = document.querySelector('#expenseTypesView');
 const expenseTypeModal = document.querySelector('#expenseTypeModal');
 const expenseTypeForm = document.querySelector('#expenseTypeForm');
+const expenseTypeParent = document.querySelector('#expenseTypeParent');
 const expenseTypeName = document.querySelector('#expenseTypeName');
 const expenseTypeDescription = document.querySelector('#expenseTypeDescription');
 const expenseTypeSearch = document.querySelector('#expenseTypeSearch');
@@ -104,11 +105,7 @@ let allExpensesPage = 1;
 let showingDeletedExpenses = false;
 let memoRowId = 0;
 let editingExpenseId = null;
-let expenseTypes = JSON.parse(localStorage.getItem('familyhisab:expense-types') || 'null') || [
-  { id: 'ET-001', name: 'Groceries', description: 'Daily household food and market expenses.', deleted: false },
-  { id: 'ET-002', name: 'Mobile Bill', description: 'Monthly mobile recharge and phone bills.', deleted: false },
-  { id: 'ET-003', name: 'Transportation', description: 'Bus, rideshare, fuel, and travel costs.', deleted: false },
-];
+let expenseTypes = [];
 
 function formatCurrency(amount) {
   return `BDT ${Number(amount || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -118,22 +115,27 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[character]));
 }
 
-function saveExpenseTypes() {
-  localStorage.setItem('familyhisab:expense-types', JSON.stringify(expenseTypes));
+async function loadExpenseTypes() {
+  if (!currentUser) return;
+  const { data, error } = await supabase.from('expense_categories').select('id, family_id, name, parent_id, description, is_deleted').eq('family_id', currentUser.id).eq('is_deleted', false).order('name');
+  if (error) { showToast(error.message, true); return; }
+  expenseTypes = data || [];
+  renderExpenseTypes();
 }
 
 function renderExpenseTypes() {
   const query = expenseTypeSearch.value.trim().toLowerCase();
-  const visibleTypes = expenseTypes.filter((type) => !type.deleted && `${type.name} ${type.description}`.toLowerCase().includes(query));
-  expenseTypesTableBody.innerHTML = visibleTypes.map((type) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4 text-xs font-semibold text-slate-500">${escapeHtml(type.id)}</td><td class="px-5 py-4 text-sm font-semibold text-slate-800">${escapeHtml(type.name)}</td><td class="max-w-md px-5 py-4 text-sm text-slate-500">${escapeHtml(type.description || 'No description')}</td><td class="px-5 py-4 text-right"><div class="inline-flex items-center gap-1"><button type="button" data-edit-expense-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600" aria-label="Edit ${escapeHtml(type.name)}"><i data-lucide="pencil" class="h-4 w-4"></i></button><button type="button" data-delete-expense-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete ${escapeHtml(type.name)}"><i data-lucide="trash-2" class="h-4 w-4"></i></button></div></td></tr>`).join('');
-  expenseTypesEmpty.classList.toggle('hidden', visibleTypes.length > 0);
+  const matches = expenseTypes.filter((type) => `${type.name} ${type.description || ''}`.toLowerCase().includes(query));
+  const visibleTypes = expenseTypes.filter((type) => matches.includes(type) || matches.some((match) => match.id === type.parent_id));
+  const parents = visibleTypes.filter((type) => !type.parent_id);
+  const orderedTypes = parents.flatMap((parent) => [parent, ...visibleTypes.filter((type) => type.parent_id === parent.id)]);
+  expenseTypesTableBody.innerHTML = orderedTypes.map((type) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4 text-xs font-semibold text-slate-500">${escapeHtml(type.id)}</td><td class="px-5 py-4 text-sm ${type.parent_id ? 'pl-10 font-medium text-slate-600' : 'font-semibold text-slate-800'}">${type.parent_id ? '<span class="mr-2 text-slate-300">↳</span>' : ''}${escapeHtml(type.name)}</td><td class="max-w-md px-5 py-4 text-sm text-slate-500">${escapeHtml(type.description || 'No description')}</td><td class="px-5 py-4 text-right"><div class="inline-flex items-center gap-1"><button type="button" data-edit-expense-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-600" aria-label="Edit ${escapeHtml(type.name)}"><i data-lucide="pencil" class="h-4 w-4"></i></button><button type="button" data-delete-expense-type="${escapeHtml(type.id)}" class="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600" aria-label="Delete ${escapeHtml(type.name)}"><i data-lucide="trash-2" class="h-4 w-4"></i></button></div></td></tr>`).join('');
+  expenseTypesEmpty.classList.toggle('hidden', orderedTypes.length > 0);
   expenseTypesTableBody.querySelectorAll('[data-edit-expense-type]').forEach((button) => button.addEventListener('click', () => openExpenseTypeModal(button.dataset.editExpenseType)));
   expenseTypesTableBody.querySelectorAll('[data-delete-expense-type]').forEach((button) => button.addEventListener('click', () => {
     const type = expenseTypes.find((item) => item.id === button.dataset.deleteExpenseType);
     if (!type || !window.confirm(`Move "${type.name}" to deleted expense types?`)) return;
-    type.deleted = true;
-    saveExpenseTypes();
-    renderExpenseTypes();
+    supabase.from('expense_categories').update({ is_deleted: true }).eq('id', type.id).eq('family_id', currentUser.id).then(({ error }) => error ? showToast(error.message, true) : loadExpenseTypes());
   }));
   if (window.lucide) lucide.createIcons();
 }
@@ -141,13 +143,15 @@ function renderExpenseTypes() {
 function setExpenseTypesView(isVisible) {
   dashboardMain.classList.toggle('hidden', isVisible);
   expenseTypesView.classList.toggle('hidden', !isVisible);
-  if (isVisible) renderExpenseTypes();
+  if (isVisible) loadExpenseTypes();
 }
 
 function openExpenseTypeModal(typeId = null) {
   editingExpenseTypeId = typeId;
   const type = expenseTypes.find((item) => item.id === typeId);
-  expenseTypeModalTitle.textContent = type ? 'Edit Expense Type' : 'Add New Expense Type';
+  expenseTypeModalTitle.textContent = type ? 'Edit Expense Item / Type' : 'Add Expense Item / Type';
+  expenseTypeParent.innerHTML = `<option value="">+ Create as New Main Type</option>${expenseTypes.filter((item) => !item.parent_id && item.id !== typeId).map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('')}`;
+  expenseTypeParent.value = type?.parent_id || '';
   expenseTypeName.value = type?.name || '';
   expenseTypeDescription.value = type?.description || '';
   expenseTypeModal.classList.remove('hidden');
@@ -160,7 +164,7 @@ function closeExpenseTypeModal() {
   expenseTypeModal.classList.remove('flex');
   expenseTypeForm.reset();
   editingExpenseTypeId = null;
-  expenseTypeModalTitle.textContent = 'Add New Expense Type';
+  expenseTypeModalTitle.textContent = 'Add Expense Item / Type';
 }
 
 function showToast(message, isError = false) {
@@ -178,6 +182,7 @@ function setAppView(view) {
   allExpensesView.classList.toggle('hidden', view !== 'all' && view !== 'deleted');
   expenseTypesView.classList.toggle('hidden', view !== 'types');
   if (view === 'memo' && !memoRows.children.length) addMemoRow();
+  if (view === 'types') loadExpenseTypes();
   if (view === 'all' || view === 'deleted') loadAllExpenses(view === 'deleted');
 }
 
@@ -745,19 +750,21 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && !expenseTypeModal.classList.contains('hidden')) closeExpenseTypeModal();
 });
 expenseTypeSearch.addEventListener('input', renderExpenseTypes);
-expenseTypeForm.addEventListener('submit', (event) => {
+expenseTypeForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   const name = expenseTypeName.value.trim();
   const description = expenseTypeDescription.value.trim();
-  if (!name) return;
-  if (editingExpenseTypeId) {
-    const type = expenseTypes.find((item) => item.id === editingExpenseTypeId);
-    if (type) Object.assign(type, { name, description });
-  } else {
-    expenseTypes.push({ id: `ET-${String(expenseTypes.length + 1).padStart(3, '0')}`, name, description, deleted: false });
-  }
-  saveExpenseTypes();
-  renderExpenseTypes();
+  if (!currentUser || !name) return;
+  const payload = { family_id: currentUser.id, name, parent_id: expenseTypeParent.value || null, description, is_deleted: false };
+  const submitButton = expenseTypeForm.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  const { error } = editingExpenseTypeId
+    ? await supabase.from('expense_categories').update({ name, parent_id: payload.parent_id, description }).eq('id', editingExpenseTypeId).eq('family_id', currentUser.id)
+    : await supabase.from('expense_categories').insert(payload);
+  submitButton.disabled = false;
+  if (error) { showToast(error.message, true); return; }
+  showToast(editingExpenseTypeId ? 'Expense type updated successfully.' : 'Expense item added successfully.');
+  await loadExpenseTypes();
   closeExpenseTypeModal();
 });
 document.querySelector('#addMemoRow').addEventListener('click', () => addMemoRow());

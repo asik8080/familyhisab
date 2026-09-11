@@ -11,14 +11,14 @@
       tailwind.config = {
         theme: { extend: {
           colors: { ink: '#172033', muted: '#718096', canvas: '#f5f7fb', navy: '#1d3557', mint: '#d9f7ec', coral: '#fff0eb', lilac: '#eeeaff' },
-          fontFamily: { sans: ['DM Sans', 'ui-sans-serif', 'system-ui'] },
+          fontFamily: { sans: ['Plus Jakarta Sans', 'ui-sans-serif', 'system-ui'] },
           boxShadow: { soft: '0 18px 45px rgba(29, 53, 87, 0.08)' }
         } }
       };
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
@@ -132,7 +132,7 @@
       <div id="expenseTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/45 px-5 py-8 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="expenseTypeModalTitle">
         <form id="expenseTypeForm" class="w-full max-w-lg overflow-hidden rounded-xl bg-white shadow-2xl">
           <div class="flex items-center justify-between bg-slate-800 px-5 py-4 text-white"><h2 id="expenseTypeModalTitle" class="font-medium">Add New Expense Type</h2><button id="closeExpenseTypeModal" type="button" class="rounded-lg p-1.5 text-slate-300 transition hover:bg-slate-700 hover:text-white" aria-label="Close expense type modal"><i data-lucide="x" class="h-5 w-5"></i></button></div>
-          <div class="space-y-5 p-5"><div><label for="expenseTypeName" class="mb-2 block text-sm font-semibold text-slate-700">Expense Type</label><input id="expenseTypeName" required placeholder="Ex: Mobile Bill" class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></div><div><label for="expenseTypeDescription" class="mb-2 block text-sm font-semibold text-slate-700">Type Description</label><textarea id="expenseTypeDescription" rows="3" placeholder="Description" class="w-full resize-none rounded-lg border border-slate-300 px-3 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"></textarea></div></div>
+          <div class="space-y-5 p-5"><div><label for="expenseTypeParent" class="mb-2 block text-sm font-semibold text-slate-700">Select Expense Type</label><select id="expenseTypeParent" class="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"></select></div><div><label for="expenseTypeName" class="mb-2 block text-sm font-semibold text-slate-700">Expense Item Name</label><input id="expenseTypeName" required placeholder="Ex: Wi-Fi Bill, Electricity Bill, Rui Fish" class="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10" /></div><div><label for="expenseTypeDescription" class="mb-2 block text-sm font-semibold text-slate-700">Description</label><textarea id="expenseTypeDescription" rows="3" placeholder="Short note or description" class="w-full resize-none rounded-lg border border-slate-300 px-3 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"></textarea></div></div>
           <div class="flex justify-end gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4"><button id="resetExpenseType" type="button" class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold tracking-wide text-slate-600 transition hover:bg-slate-100">RESET</button><button type="submit" class="rounded-lg border border-blue-600 bg-blue-600 px-4 py-2.5 text-xs font-bold tracking-wide text-white transition hover:bg-blue-700">SUBMIT</button></div>
         </form>
       </div>
