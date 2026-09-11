@@ -51,6 +51,7 @@ const expenseSubmit = document.querySelector('#expenseSubmit');
 const expensesTableBody = document.querySelector('#expensesTableBody');
 const expensesEmpty = document.querySelector('#expensesEmpty');
 const expenseDate = document.querySelector('#expenseDate');
+const expenseMemoDate = document.querySelector('#expenseMemoDate');
 const profileButton = document.querySelector('#profileButton');
 const profileDropdown = document.querySelector('#profileDropdown');
 const profileModal = document.querySelector('#profileModal');
@@ -425,6 +426,7 @@ async function showDashboard(isVisible, user = currentUser) {
   if (isVisible) {
     currentUser = user;
     expenseDate.value = new Date().toISOString().slice(0, 10);
+    expenseMemoDate.value = new Date().toISOString().slice(0, 10);
     await syncSignupProfile(currentUser);
     await loadProfile();
     await loadExpenses();
@@ -753,7 +755,7 @@ expenseMemoForm.addEventListener('submit', async (event) => {
   saveButton.disabled = true;
   const { error } = editingExpenseId
     ? await supabase.from('expenses').update({ ...rows[0], total_amount: rows[0].quantity * rows[0].unit_price }).eq('id', editingExpenseId).eq('user_id', currentUser.id)
-    : await supabase.from('expenses').insert(rows.map((row) => ({ ...row, family_id: currentUser.id, user_id: currentUser.id, total_amount: row.quantity * row.unit_price, is_deleted: false })));
+    : await supabase.from('expenses').insert(rows.map((row) => ({ ...row, user_id: currentUser.id, expense_date: expenseMemoDate.value, total_amount: row.quantity * row.unit_price, is_deleted: false })));
   saveButton.disabled = false;
   if (error) return showToast(error.message, true);
   showToast('Invoice saved successfully!');
