@@ -265,6 +265,8 @@ async function softDeleteExpense(expenseId) {
   const { error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', expenseId).eq('user_id', currentUser.id);
   if (error) { allExpenses = previous; renderAllExpenses(); showToast(error.message, true); return; }
   showToast('Expense moved to Deleted Expenses.');
+  window.location.hash = '#deleted-expenses';
+  setAppView('deleted');
 }
 
 async function restoreExpense(expenseId) {
