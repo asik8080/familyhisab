@@ -78,12 +78,30 @@ const expenseTypeSearch = document.querySelector('#expenseTypeSearch');
 const expenseTypesTableBody = document.querySelector('#expenseTypesTableBody');
 const expenseTypesEmpty = document.querySelector('#expenseTypesEmpty');
 const expenseTypeModalTitle = document.querySelector('#expenseTypeModalTitle');
+const expenseMemoView = document.querySelector('#expenseMemoView');
+const expenseMemoForm = document.querySelector('#expenseMemoForm');
+const memoRows = document.querySelector('#memoRows');
+const memoTotal = document.querySelector('#memoTotal');
+const allExpensesView = document.querySelector('#allExpensesView');
+const allExpensesTableBody = document.querySelector('#allExpensesTableBody');
+const allExpensesEmpty = document.querySelector('#allExpensesEmpty');
+const allExpensesSearch = document.querySelector('#allExpensesSearch');
+const expenseDateFilter = document.querySelector('#expenseDateFilter');
+const expenseTypeFilter = document.querySelector('#expenseTypeFilter');
+const expensePageSize = document.querySelector('#expensePageSize');
+const expensePageLabel = document.querySelector('#expensePageLabel');
+const expensePrevPage = document.querySelector('#expensePrevPage');
+const expenseNextPage = document.querySelector('#expenseNextPage');
 let authMode = 'signIn';
 let currentUser = null;
 let currentProfile = null;
 let expensesChannel = null;
 let resetStep = 'requestCode';
 let editingExpenseTypeId = null;
+let allExpenses = [];
+let allExpensesPage = 1;
+let memoRowId = 0;
+let editingExpenseId = null;
 let expenseTypes = JSON.parse(localStorage.getItem('familyhisab:expense-types') || 'null') || [
   { id: 'ET-001', name: 'Groceries', description: 'Daily household food and market expenses.', deleted: false },
   { id: 'ET-002', name: 'Mobile Bill', description: 'Monthly mobile recharge and phone bills.', deleted: false },
@@ -141,6 +159,105 @@ function closeExpenseTypeModal() {
   expenseTypeForm.reset();
   editingExpenseTypeId = null;
   expenseTypeModalTitle.textContent = 'Add New Expense Type';
+}
+
+function showToast(message, isError = false) {
+  const toast = document.createElement('div');
+  toast.className = `fixed right-5 top-5 z-[70] rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-xl ${isError ? 'bg-rose-600' : 'bg-emerald-600'}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+function setAppView(view) {
+  dashboardMain.classList.toggle('hidden', view !== 'dashboard');
+  expenseMemoView.classList.toggle('hidden', view !== 'memo');
+  allExpensesView.classList.toggle('hidden', view !== 'all' && view !== 'deleted');
+  expenseTypesView.classList.toggle('hidden', view !== 'types');
+  if (view === 'memo' && !memoRows.children.length) addMemoRow();
+  if (view === 'all' || view === 'deleted') loadAllExpenses(view === 'deleted');
+}
+
+function renderMemoTotal() {
+  const total = [...memoRows.querySelectorAll('[data-memo-row]')].reduce((sum, row) => sum + (Number(row.querySelector('[data-field="quantity"]').value) || 0) * (Number(row.querySelector('[data-field="unit-price"]').value) || 0), 0);
+  memoTotal.textContent = `৳ ${total.toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function addMemoRow(values = {}) {
+  memoRowId += 1;
+  const row = document.createElement('div');
+  row.dataset.memoRow = String(memoRowId);
+  row.className = 'grid gap-3 px-5 py-5 sm:grid-cols-[2fr_1.3fr_0.8fr_0.7fr_1fr_auto] sm:items-end';
+  row.innerHTML = `<div><label class="mb-2 block text-xs font-semibold text-slate-600">Item name</label><input data-field="name" required value="${escapeHtml(values.name || '')}" placeholder="Rui Fish" class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" /></div><div><label class="mb-2 block text-xs font-semibold text-slate-600">Expense type</label><input data-field="expense-type" required value="${escapeHtml(values.expenseType || '')}" placeholder="Food & Groceries" class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" /></div><div><label class="mb-2 block text-xs font-semibold text-slate-600">Unit</label><input data-field="unit" required value="${escapeHtml(values.unit || 'pcs')}" placeholder="kg" class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" /></div><div><label class="mb-2 block text-xs font-semibold text-slate-600">Quantity</label><input data-field="quantity" required min="0.001" step="0.001" type="number" value="${values.quantity || 1}" class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" /></div><div><label class="mb-2 block text-xs font-semibold text-slate-600">Unit price</label><input data-field="unit-price" required min="0.01" step="0.01" type="number" value="${values.unitPrice || ''}" placeholder="0.00" class="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm" /></div><button type="button" data-remove-memo-row class="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600" aria-label="Remove item"><i data-lucide="trash-2" class="h-4 w-4"></i></button>`;
+  row.querySelectorAll('input').forEach((input) => input.addEventListener('input', renderMemoTotal));
+  row.querySelector('[data-remove-memo-row]').addEventListener('click', () => { if (memoRows.children.length > 1) row.remove(); renderMemoTotal(); });
+  memoRows.appendChild(row);
+  if (window.lucide) lucide.createIcons();
+  renderMemoTotal();
+}
+
+function formatTaka(amount) {
+  return `৳ ${Number(amount || 0).toLocaleString('en-BD', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function getFilteredAllExpenses() {
+  const query = allExpensesSearch.value.trim().toLowerCase();
+  const type = expenseTypeFilter.value;
+  const now = new Date();
+  return allExpenses.filter((expense) => {
+    const date = new Date(`${expense.expense_date}T00:00:00`);
+    const matchesText = !query || `${expense.item_name || expense.title} ${expense.note || ''}`.toLowerCase().includes(query);
+    const matchesType = type === 'all' || expense.expense_type === type;
+    let matchesDate = true;
+    if (expenseDateFilter.value === 'today') matchesDate = date.toDateString() === now.toDateString();
+    if (expenseDateFilter.value === 'month') matchesDate = date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    if (expenseDateFilter.value === 'week') matchesDate = (now - date) / 86400000 < 7 && date <= now;
+    return matchesText && matchesType && matchesDate;
+  });
+}
+
+function renderAllExpenses() {
+  const filtered = getFilteredAllExpenses();
+  const pageSize = Number(expensePageSize.value);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  allExpensesPage = Math.min(allExpensesPage, totalPages);
+  const pageRows = filtered.slice((allExpensesPage - 1) * pageSize, allExpensesPage * pageSize);
+  allExpensesTableBody.innerHTML = pageRows.map((expense) => `<tr class="transition hover:bg-slate-50"><td class="px-5 py-4 text-sm text-slate-600">${new Date(`${expense.expense_date}T00:00:00`).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td><td class="px-5 py-4"><p class="text-sm font-semibold text-slate-800">${escapeHtml(expense.item_name || expense.title)}</p><p class="mt-1 text-xs text-slate-400">${escapeHtml(expense.quantity || 1)} ${escapeHtml(expense.unit || 'pcs')}${expense.note ? ` · ${escapeHtml(expense.note)}` : ''}</p></td><td class="px-5 py-4"><span class="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">${escapeHtml(expense.expense_type || expense.category || 'All Cost')}</span></td><td class="px-5 py-4 text-sm text-slate-600">${formatTaka(expense.unit_price || expense.amount)}</td><td class="px-5 py-4 font-['Space_Grotesk'] text-sm font-bold text-slate-900">${formatTaka(expense.total_amount || expense.amount)}</td><td class="px-5 py-4 text-sm text-slate-600">${escapeHtml(expense.added_by || 'You')}</td><td class="px-5 py-4 text-right"><button type="button" data-edit-all-expense="${expense.id}" class="rounded-lg p-2 text-slate-500 hover:bg-blue-50 hover:text-blue-600" aria-label="Edit expense"><i data-lucide="pencil" class="h-4 w-4"></i></button><button type="button" data-delete-all-expense="${expense.id}" class="rounded-lg p-2 text-slate-500 hover:bg-rose-50 hover:text-rose-600" aria-label="Delete expense"><i data-lucide="trash-2" class="h-4 w-4"></i></button></td></tr>`).join('');
+  allExpensesEmpty.classList.toggle('hidden', pageRows.length > 0);
+  document.querySelector('#allExpensesMonthlyTotal').textContent = formatTaka(allExpenses.filter((expense) => new Date(expense.expense_date).getMonth() === new Date().getMonth()).reduce((sum, expense) => sum + Number(expense.total_amount || expense.amount || 0), 0));
+  document.querySelector('#allExpensesTransactionCount').textContent = allExpenses.length;
+  expensePageLabel.textContent = `Page ${allExpensesPage} of ${totalPages}`;
+  expensePrevPage.disabled = allExpensesPage === 1;
+  expenseNextPage.disabled = allExpensesPage === totalPages;
+  allExpensesTableBody.querySelectorAll('[data-delete-all-expense]').forEach((button) => button.addEventListener('click', () => softDeleteExpense(button.dataset.deleteAllExpense)));
+  allExpensesTableBody.querySelectorAll('[data-edit-all-expense]').forEach((button) => button.addEventListener('click', () => {
+    const expense = allExpenses.find((item) => item.id === button.dataset.editAllExpense);
+    if (!expense) return;
+    editingExpenseId = expense.id;
+    memoRows.innerHTML = '';
+    addMemoRow({ name: expense.item_name || expense.title, expenseType: expense.expense_type || expense.category, unit: expense.unit, quantity: expense.quantity, unitPrice: expense.unit_price || expense.amount });
+    window.location.hash = '#expense/add';
+    setAppView('memo');
+  }));
+  if (window.lucide) lucide.createIcons();
+}
+
+async function loadAllExpenses(includeDeleted = false) {
+  if (!currentUser) return;
+  const { data, error } = await supabase.from('expenses').select('id, expense_date, item_name, title, expense_type, category, unit, quantity, unit_price, total_amount, amount, note, user_id').eq('user_id', currentUser.id).eq('is_deleted', includeDeleted).order('expense_date', { ascending: false });
+  if (error) { showToast(error.message, true); return; }
+  allExpenses = data || [];
+  allExpensesPage = 1;
+  renderAllExpenses();
+}
+
+async function softDeleteExpense(expenseId) {
+  const previous = allExpenses;
+  allExpenses = allExpenses.filter((expense) => expense.id !== expenseId);
+  renderAllExpenses();
+  const { error } = await supabase.from('expenses').update({ is_deleted: true }).eq('id', expenseId).eq('user_id', currentUser.id);
+  if (error) { allExpenses = previous; renderAllExpenses(); showToast(error.message, true); return; }
+  showToast('Expense moved to Deleted Expenses.');
 }
 
 function showExpenseMessage(message, isError = false) {
@@ -312,6 +429,8 @@ async function showDashboard(isVisible, user = currentUser) {
     await loadProfile();
     await loadExpenses();
     subscribeToExpenses();
+    const route = window.location.hash;
+    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : 'dashboard');
   } else {
     unsubscribeFromExpenses();
   }
@@ -584,12 +703,14 @@ expenseLinks.forEach((link) => {
   link.addEventListener('click', () => {
     setActiveExpenseLink(link);
     setExpensesExpanded(true);
-    setExpenseTypesView(link.dataset.expenseLink === 'types');
+    const view = link.dataset.expenseLink === 'types' ? 'types' : link.dataset.expenseLink === 'all' ? 'all' : link.dataset.expenseLink === 'add' ? 'memo' : 'dashboard';
+    window.location.hash = link.getAttribute('href');
+    setAppView(view);
     setSidebar(false);
   });
 });
 document.querySelector('#expenseTypesBack').addEventListener('click', () => {
-  setExpenseTypesView(false);
+  setAppView('dashboard');
   window.location.hash = '#dashboard';
 });
 document.querySelector('#addExpenseTypeButton').addEventListener('click', () => openExpenseTypeModal());
@@ -620,6 +741,38 @@ expenseTypeForm.addEventListener('submit', (event) => {
   renderExpenseTypes();
   closeExpenseTypeModal();
 });
+document.querySelector('#addMemoRow').addEventListener('click', () => addMemoRow());
+document.querySelector('#memoBackButton').addEventListener('click', () => { window.location.hash = '#dashboard'; setAppView('dashboard'); });
+document.querySelector('#newExpenseButton').addEventListener('click', () => { window.location.hash = '#expense/add'; setAppView('memo'); });
+expenseMemoForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!currentUser) return showToast('Please sign in before saving an invoice.', true);
+  const rows = [...memoRows.querySelectorAll('[data-memo-row]')].map((row) => ({ item_name: row.querySelector('[data-field="name"]').value.trim(), expense_type: row.querySelector('[data-field="expense-type"]').value.trim(), unit: row.querySelector('[data-field="unit"]').value.trim(), quantity: Number(row.querySelector('[data-field="quantity"]').value), unit_price: Number(row.querySelector('[data-field="unit-price"]').value) }));
+  if (rows.some((row) => !row.item_name || !row.expense_type || !row.unit || !Number.isFinite(row.quantity) || row.quantity <= 0 || !Number.isFinite(row.unit_price) || row.unit_price <= 0)) return showToast('Please complete every item with a valid name, quantity, unit, and price.', true);
+  const saveButton = document.querySelector('#saveInvoiceButton');
+  saveButton.disabled = true;
+  const { error } = await supabase.from('expenses').insert(rows.map((row) => ({ ...row, family_id: currentUser.id, user_id: currentUser.id, total_amount: row.quantity * row.unit_price, is_deleted: false })));
+  saveButton.disabled = false;
+  if (error) return showToast(error.message, true);
+  showToast('Invoice saved successfully!');
+  expenseMemoForm.reset();
+  memoRows.innerHTML = '';
+  addMemoRow();
+  window.location.hash = '#expenses/all';
+  setAppView('all');
+});
+[allExpensesSearch, expenseDateFilter, expenseTypeFilter, expensePageSize].forEach((control) => control.addEventListener('input', () => { allExpensesPage = 1; renderAllExpenses(); }));
+expensePrevPage.addEventListener('click', () => { if (allExpensesPage > 1) { allExpensesPage -= 1; renderAllExpenses(); } });
+expenseNextPage.addEventListener('click', () => { const totalPages = Math.max(1, Math.ceil(getFilteredAllExpenses().length / Number(expensePageSize.value))); if (allExpensesPage < totalPages) { allExpensesPage += 1; renderAllExpenses(); } });
+document.querySelector('#exportExpensesButton').addEventListener('click', () => {
+  const rows = getFilteredAllExpenses();
+  const csv = [['Date', 'Item', 'Expense Type', 'Unit Price', 'Total Amount'], ...rows.map((expense) => [expense.expense_date, expense.item_name || expense.title, expense.expense_type || expense.category, expense.unit_price || expense.amount, expense.total_amount || expense.amount])].map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  link.download = 'all-expenses.csv';
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
 document.querySelectorAll('.nav-item').forEach((item) => {
   item.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach((navItem) => {
@@ -628,7 +781,7 @@ document.querySelectorAll('.nav-item').forEach((item) => {
     });
     item.classList.add('bg-navy', 'text-white', 'shadow-lg', 'shadow-navy/10');
     item.classList.remove('text-slate-500');
-    setExpenseTypesView(false);
+    setAppView('dashboard');
     setSidebar(false);
   });
 });
