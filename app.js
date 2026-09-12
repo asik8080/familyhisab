@@ -111,6 +111,20 @@ const expensePageSize = document.querySelector('#expensePageSize');
 const expensePageLabel = document.querySelector('#expensePageLabel');
 const expensePrevPage = document.querySelector('#expensePrevPage');
 const expenseNextPage = document.querySelector('#expenseNextPage');
+const membersView = document.querySelector('#membersView');
+const membersTableBody = document.querySelector('#membersTableBody');
+const membersEmpty = document.querySelector('#membersEmpty');
+const userRoleFilter = document.querySelector('#userRoleFilter');
+const addUserButton = document.querySelector('#addUserButton');
+const addUserModal = document.querySelector('#addUserModal');
+const addUserForm = document.querySelector('#addUserForm');
+const closeAddUserModal = document.querySelector('#closeAddUserModal');
+const cancelAddUser = document.querySelector('#cancelAddUser');
+const newUserName = document.querySelector('#newUserName');
+const newUserEmail = document.querySelector('#newUserEmail');
+const newUserPassword = document.querySelector('#newUserPassword');
+const newUserConfirmPassword = document.querySelector('#newUserConfirmPassword');
+const newUserRole = document.querySelector('#newUserRole');
 let authMode = 'signIn';
 let currentUser = null;
 let currentProfile = null;
@@ -123,6 +137,7 @@ let showingDeletedExpenses = false;
 let allExpensesLoadId = 0;
 let memoRowId = 0;
 let editingExpenseId = null;
+let members = [];
 let expenseTypes = [];
 
 function formatCurrency(amount) {
@@ -290,11 +305,13 @@ function setAppView(view) {
   expenseMemoView.classList.toggle('hidden', view !== 'memo');
   allExpensesView.classList.toggle('hidden', view !== 'all' && view !== 'deleted');
   expenseTypesView.classList.toggle('hidden', view !== 'types');
+  membersView.classList.toggle('hidden', view !== 'members');
   if (view === 'memo' && !memoRows.children.length) addMemoRow();
   if (view === 'types') loadExpenseTypes();
   if (view === 'income-types' || view === 'income') loadIncomeTypes();
   if (view === 'income' || view === 'deleted-income') loadIncomes(view === 'deleted-income');
   if (view === 'all' || view === 'deleted') loadAllExpenses(view === 'deleted');
+  if (view === 'members') loadMembers();
 }
 
 function renderMemoTotal() {
@@ -426,7 +443,7 @@ function updateProfileUI(profile) {
 
 async function loadProfile() {
   if (!currentUser) return;
-  const { data, error } = await supabase.from('users').select('id, name, email, phone, avatar_url').eq('id', currentUser.id).maybeSingle();
+  const { data, error } = await supabase.from('users').select('id, name, email, phone, avatar_url, role').eq('id', currentUser.id).maybeSingle();
   if (error) {
     showProfileMessage(error.message, true);
     return;
@@ -434,11 +451,16 @@ async function loadProfile() {
   if (data) {
     currentProfile = data;
   } else {
-    currentProfile = { id: currentUser.id, name: currentUser.user_metadata?.name || '', email: currentUser.email || '', phone: '', avatar_url: '' };
+    currentProfile = { id: currentUser.id, name: currentUser.user_metadata?.name || '', email: currentUser.email || '', phone: '', avatar_url: '', role: 'Member' };
     const { error: profileInsertError } = await supabase.from('users').upsert(currentProfile, { onConflict: 'id' });
     if (profileInsertError) showProfileMessage(profileInsertError.message, true);
   }
   updateProfileUI(currentProfile);
+  const canManageMembers = currentProfile.role === 'Admin';
+  addUserButton.disabled = !canManageMembers;
+  addUserButton.title = canManageMembers ? 'Add a family member' : 'Only Admins can add members';
+  addUserButton.classList.toggle('cursor-not-allowed', !canManageMembers);
+  addUserButton.classList.toggle('opacity-50', !canManageMembers);
 }
 
 async function syncSignupProfile(user) {
@@ -552,6 +574,103 @@ function setAuthMode(mode) {
   authMessage.classList.add('hidden');
 }
 
+async function loadMembers() {
+  if (!currentUser) return;
+  const { data, error } = await supabase.functions.invoke('list-family-members', { method: 'GET' });
+  if (error) {
+    let message = error.message;
+    try {
+      const details = await error.context?.json();
+      message = details?.error || message;
+    } catch {
+      // Keep the SDK error when the response body is unavailable.
+    }
+    showToast(message, true);
+    return;
+  }
+  members = data?.members || [];
+  renderMembers();
+}
+
+function setAddUserModal(isOpen) {
+  addUserModal.classList.toggle('hidden', !isOpen);
+  addUserModal.classList.toggle('flex', isOpen);
+  if (isOpen) newUserName.focus();
+}
+
+async function addMember(event) {
+  event.preventDefault();
+  if (!currentUser) return showToast('Please sign in before adding a member.', true);
+
+  const name = newUserName.value.trim();
+  const email = newUserEmail.value.trim().toLowerCase();
+  const password = newUserPassword.value;
+  const confirmPassword = newUserConfirmPassword.value;
+  const role = newUserRole.value;
+  if (password !== confirmPassword) {
+    showToast('Password and confirm password do not match.', true);
+    return;
+  }
+  addUserForm.querySelector('button[type="submit"]').disabled = true;
+
+  const { error } = await supabase.functions.invoke('create-family-member', { body: { name, email, password, role } });
+  addUserForm.querySelector('button[type="submit"]').disabled = false;
+  if (error) {
+    let message = error.message;
+    try {
+      const details = await error.context?.json();
+      message = details?.error || message;
+    } catch {
+      // Keep the SDK error when the response body is unavailable.
+    }
+    showToast(message, true);
+    return;
+  }
+
+  addUserForm.reset();
+  setAddUserModal(false);
+  await loadMembers();
+  showToast('Family member added successfully.');
+}
+
+function renderMembers() {
+  const roleFilter = userRoleFilter.value;
+  const filtered = roleFilter === 'ALL' ? members : members.filter(m => m.role === roleFilter);
+
+  membersTableBody.innerHTML = filtered.map(member => {
+    const initials = getInitials(member.name);
+    const avatar = member.avatar_url
+      ? `<img src="${escapeHtml(member.avatar_url)}" class="h-10 w-10 rounded-full object-cover">`
+      : `<div class="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-500">${initials}</div>`;
+
+    return `<tr class="transition hover:bg-slate-50">
+      <td class="px-6 py-4">
+        <div class="flex items-center gap-3">
+          ${avatar}
+          <span class="text-sm font-semibold text-slate-800">${escapeHtml(member.name || 'Unnamed')}</span>
+        </div>
+      </td>
+      <td class="px-6 py-4 text-sm text-slate-600">${escapeHtml(member.name?.toLowerCase().replace(/\s+/g, '.') || 'user')}</td>
+      <td class="px-6 py-4">
+        <span class="rounded-full px-3 py-1 text-[11px] font-bold ${
+          member.role === 'Admin' ? 'bg-amber-50 text-amber-600' :
+          member.role === 'Viewer' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'
+        }">${escapeHtml(member.role || 'Member')}</span>
+      </td>
+      <td class="px-6 py-4 text-sm text-slate-600">${escapeHtml(member.email)}</td>
+      <td class="px-6 py-4 text-right">
+        <div class="inline-flex items-center gap-1">
+          <button type="button" class="rounded-lg p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"><i data-lucide="pencil" class="h-4 w-4"></i></button>
+          <button type="button" class="rounded-lg p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  membersEmpty.classList.toggle('hidden', filtered.length > 0);
+  if (window.lucide) lucide.createIcons();
+}
+
 async function showDashboard(isVisible, user = currentUser) {
   authView.classList.toggle('hidden', isVisible);
   dashboardView.classList.toggle('hidden', !isVisible);
@@ -565,7 +684,7 @@ async function showDashboard(isVisible, user = currentUser) {
     await loadExpenses();
     subscribeToExpenses();
     const route = window.location.hash;
-    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/add' || route === '#income/all' || route === '#income' ? 'income' : 'dashboard');
+    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/add' || route === '#income/all' || route === '#income' ? 'income' : route === '#members' ? 'members' : 'dashboard');
   } else {
     unsubscribeFromExpenses();
   }
@@ -670,7 +789,7 @@ authForm.addEventListener('submit', async (event) => {
       showMessage('Password and confirm password do not match.', true);
       return;
     }
-    const profilePayload = { name: fullName, first_name: firstName, last_name: lastName, email, family_name: familyNameInput.value.trim(), birth_date: birthDateInput.value, phone: phoneInput.value.trim(), marital_status: maritalStatusInput.value, nationality: nationalityInput.value.trim(), id_card: idCardInput.value.trim() || null };
+    const profilePayload = { name: fullName, first_name: firstName, last_name: lastName, email, family_name: familyNameInput.value.trim(), birth_date: birthDateInput.value, phone: phoneInput.value.trim(), marital_status: maritalStatusInput.value, nationality: nationalityInput.value.trim(), id_card: idCardInput.value.trim() || null, role: 'Admin' };
     result = await supabase.auth.signUp({ email, password, options: { data: profilePayload } });
     if (!result.error && result.data.user && result.data.session) {
       const { error: profileError } = await supabase.from('users').upsert({ id: result.data.user.id, ...profilePayload }, { onConflict: 'id' });
@@ -992,10 +1111,17 @@ document.querySelectorAll('.nav-item').forEach((item) => {
     });
     item.classList.add('bg-navy', 'text-white', 'shadow-lg', 'shadow-navy/10');
     item.classList.remove('text-slate-500');
-    setAppView(item.dataset.nav === 'Income' ? 'income' : 'dashboard');
+        setAppView(item.dataset.nav === 'Income' ? 'income' : item.dataset.nav === 'Members' ? 'members' : 'dashboard');
     setSidebar(false);
   });
 });
+
+userRoleFilter.addEventListener('change', renderMembers);
+addUserButton.addEventListener('click', () => setAddUserModal(true));
+closeAddUserModal.addEventListener('click', () => setAddUserModal(false));
+cancelAddUser.addEventListener('click', () => setAddUserModal(false));
+addUserModal.addEventListener('click', (event) => { if (event.target === addUserModal) setAddUserModal(false); });
+addUserForm.addEventListener('submit', addMember);
 
 if (window.lucide) lucide.createIcons();
 })();
