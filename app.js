@@ -173,6 +173,7 @@ const newUserRole = document.querySelector('#newUserRole');
 let authMode = 'signIn';
 let currentUser = null;
 let currentProfile = null;
+let dashboardLoadUserId = null;
 let expensesChannel = null;
 let resetStep = 'requestCode';
 let editingExpenseTypeId = null;
@@ -186,6 +187,10 @@ let editingExpenseId = null;
 let editingIncomeId = null;
 let members = [];
 let expenseTypes = [];
+
+function isAdmin() {
+  return currentProfile?.role === 'Admin';
+}
 
 const clearExpensesButton = document.createElement('button');
 clearExpensesButton.type = 'button';
@@ -262,8 +267,20 @@ async function ensureDetailedExpenseCategories() {
 
 async function ensureDefaultIncomeSources() {
   if (!currentUser) return false;
-  const { data: existing, error: loadError } = await supabase.from('income_categories').select('id, name, description, is_deleted').eq('user_id', currentUser.id);
+  const { data: loadedCategories, error: loadError } = await supabase.from('income_categories').select('id, name, description, is_deleted').eq('user_id', currentUser.id);
   if (loadError) { showToast(loadError.message, true); return false; }
+  const uniqueCategories = new Map();
+  const duplicateIds = [];
+  (loadedCategories || []).forEach((category) => {
+    const key = `${category.name}|${category.description || ''}`;
+    if (uniqueCategories.has(key)) duplicateIds.push(category.id);
+    else uniqueCategories.set(key, category);
+  });
+  if (duplicateIds.length) {
+    const { error } = await supabase.from('income_categories').delete().in('id', duplicateIds).eq('user_id', currentUser.id);
+    if (error) { showToast(error.message, true); return false; }
+  }
+  const existing = [...uniqueCategories.values()];
   const activeCategories = (existing || []).filter((category) => !category.is_deleted);
   if (activeCategories.length) {
     const { error } = await supabase.from('income_categories').update({ is_deleted: true }).eq('user_id', currentUser.id).eq('is_deleted', false);
@@ -282,6 +299,7 @@ async function ensureDefaultIncomeSources() {
         ? await supabase.from('income_categories').update({ name: row.name, description: row.description, is_deleted: false }).eq('id', existingRow.id).eq('user_id', currentUser.id)
         : await supabase.from('income_categories').insert({ user_id: currentUser.id, name: row.name, description: row.description, is_deleted: false });
       if (result.error) { showToast(result.error.message, true); return false; }
+      if (!existingRow) categoryByKey.set(key, { name: row.name, description: row.description, is_deleted: false });
     }
   }
   return true;
@@ -957,18 +975,27 @@ function getInitials(name) {
   return (name || 'User').trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
 }
 
-function updateProfileUI(profile) {
+async function resolveAvatarUrl(value) {
+  if (!value) return '';
+  if (value.startsWith('http')) return value;
+  const { data, error } = await supabase.storage.from('avatars').createSignedUrl(value, 3600);
+  if (error) return '';
+  return data.signedUrl;
+}
+
+async function updateProfileUI(profile) {
   const displayName = profile.name || currentUser?.user_metadata?.name || 'Family member';
   const email = profile.email || currentUser?.email || '';
   const initials = getInitials(displayName);
-  const avatarImage = profile.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="${escapeHtml(displayName)}" class="h-full w-full object-cover">` : initials;
+  const avatarUrl = await resolveAvatarUrl(profile.avatar_url);
+  const avatarImage = avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}" class="h-full w-full object-cover">` : initials;
   const headerAvatar = profileButton.children[0];
   headerAvatar.innerHTML = avatarImage;
   headerAvatar.className = 'grid h-8 w-8 place-items-center overflow-hidden rounded-lg bg-[#e6d8ca] text-xs font-bold text-[#674a39]';
   profileButton.children[1].querySelector('span:first-child').textContent = displayName;
   document.querySelector('#dropdownName').textContent = displayName;
   document.querySelector('#dropdownEmail').textContent = email;
-  profileAvatarPreview.innerHTML = profile.avatar_url ? `<img src="${escapeHtml(profile.avatar_url)}" alt="${escapeHtml(displayName)}" class="h-full w-full object-cover">` : initials;
+  profileAvatarPreview.innerHTML = avatarUrl ? `<img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(displayName)}" class="h-full w-full object-cover">` : initials;
   document.querySelector('#profileNameInput').value = displayName;
   document.querySelector('#profilePhoneInput').value = profile.phone || '';
   document.querySelector('#profileEmailInput').value = email;
@@ -985,15 +1012,37 @@ async function loadProfile() {
     currentProfile = data;
   } else {
     currentProfile = { id: currentUser.id, name: currentUser.user_metadata?.name || '', email: currentUser.email || '', phone: '', avatar_url: '', role: 'Member' };
-    const { error: profileInsertError } = await supabase.from('users').upsert(currentProfile, { onConflict: 'id' });
+    const { error: profileInsertError } = await supabase.from('users').upsert({ id: currentProfile.id, name: currentProfile.name, email: currentProfile.email, phone: currentProfile.phone, avatar_url: currentProfile.avatar_url }, { onConflict: 'id' });
     if (profileInsertError) showProfileMessage(profileInsertError.message, true);
   }
-  updateProfileUI(currentProfile);
-  const canManageMembers = currentProfile.role === 'Admin';
+  await updateProfileUI(currentProfile);
+  const canManageMembers = isAdmin();
   addUserButton.disabled = !canManageMembers;
   addUserButton.title = canManageMembers ? 'Add a family member' : 'Only Admins can add members';
   addUserButton.classList.toggle('cursor-not-allowed', !canManageMembers);
   addUserButton.classList.toggle('opacity-50', !canManageMembers);
+}
+
+async function loadUserContext(user) {
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, name, email, phone, avatar_url, role')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  currentProfile = data || {
+    id: user.id,
+    name: user.user_metadata?.name || '',
+    email: user.email || '',
+    phone: '',
+    avatar_url: '',
+    role: 'Member',
+  };
+  return currentProfile;
 }
 
 async function syncSignupProfile(user) {
@@ -1032,7 +1081,7 @@ async function uploadAvatar(file) {
   const path = `${currentUser.id}/avatar.${extension}`;
   const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type, cacheControl: '3600' });
   if (error) throw error;
-  return `${supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl}?v=${Date.now()}`;
+  return path;
 }
 
 function renderExpenses(expenses) {
@@ -1146,7 +1195,7 @@ function setAuthMode(mode) {
 }
 
 async function loadMembers() {
-  if (!currentUser) return;
+  if (!currentUser || !isAdmin()) return;
   const { data, error } = await supabase.functions.invoke('list-family-members', { method: 'GET' });
   if (error) {
     let message = error.message;
@@ -1172,6 +1221,7 @@ function setAddUserModal(isOpen) {
 async function addMember(event) {
   event.preventDefault();
   if (!currentUser) return showToast('Please sign in before adding a member.', true);
+  if (!isAdmin()) return showToast('Only Admins can add family members.', true);
 
   const name = newUserName.value.trim();
   const email = newUserEmail.value.trim().toLowerCase();
@@ -1247,20 +1297,27 @@ async function showDashboard(isVisible, user = currentUser, forceDashboard = fal
   dashboardView.classList.toggle('hidden', !isVisible);
   if (isVisible) {
     currentUser = user;
-    await ensureDetailedExpenseCategories();
-    await ensureDefaultIncomeSources();
+    await loadUserContext(currentUser);
     expenseDate.value = new Date().toISOString().slice(0, 10);
     expenseMemoDate.value = new Date().toISOString().slice(0, 10);
     incomeDate.value = new Date().toISOString().slice(0, 10);
-    await syncSignupProfile(currentUser);
-    await loadProfile();
-    await Promise.all([loadExpenses(), loadIncomes()]);
+
+    if (dashboardLoadUserId !== currentUser.id) {
+      dashboardLoadUserId = currentUser.id;
+      await updateProfileUI(currentProfile);
+      Promise.all([loadExpenses(), loadIncomes()]).catch((error) => showToast(error.message, true));
+      Promise.resolve()
+        .then(() => syncSignupProfile(currentUser))
+        .then(() => Promise.all([ensureDetailedExpenseCategories(), ensureDefaultIncomeSources()]))
+        .catch((error) => showToast(error.message, true));
+    }
     subscribeToExpenses();
     if (forceDashboard) window.location.hash = '#dashboard';
     const route = window.location.hash;
     setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/all' ? 'income-all' : route === '#income/add' || route === '#income' ? 'income' : route === '#reports/cash-in-hand' ? 'cash-in-hand' : route === '#reports/income-statement' ? 'income-statement' : route === '#reports/expense' ? 'expense-report' : route === '#reports' ? 'reports' : route === '#members' ? 'members' : 'dashboard');
     if (!route || route === '#dashboard') collapseNavigationMenus();
   } else {
+    dashboardLoadUserId = null;
     unsubscribeFromExpenses();
   }
 }
@@ -1364,7 +1421,7 @@ authForm.addEventListener('submit', async (event) => {
       showMessage('Password and confirm password do not match.', true);
       return;
     }
-    const profilePayload = { name: fullName, first_name: firstName, last_name: lastName, email, family_name: familyNameInput.value.trim(), birth_date: birthDateInput.value, phone: phoneInput.value.trim(), marital_status: maritalStatusInput.value, nationality: nationalityInput.value.trim(), id_card: idCardInput.value.trim() || null, role: 'Admin' };
+    const profilePayload = { name: fullName, first_name: firstName, last_name: lastName, email, family_name: familyNameInput.value.trim(), birth_date: birthDateInput.value, phone: phoneInput.value.trim(), marital_status: maritalStatusInput.value, nationality: nationalityInput.value.trim(), id_card: idCardInput.value.trim() || null };
     result = await supabase.auth.signUp({ email, password, options: { data: profilePayload } });
     if (!result.error && result.data.user && result.data.session) {
       const { error: profileError } = await supabase.from('users').upsert({ id: result.data.user.id, ...profilePayload }, { onConflict: 'id' });
@@ -1389,7 +1446,7 @@ authForm.addEventListener('submit', async (event) => {
     return;
   }
   currentUser = result.data.user;
-  await showDashboard(true, currentUser, true);
+  await showDashboard(true, currentUser);
 });
 
 expenseForm.addEventListener('submit', async (event) => {
@@ -1455,14 +1512,18 @@ avatarInput.addEventListener('change', async () => {
     showProfileMessage('Please choose a PNG, JPG, or WEBP image.', true);
     return;
   }
+  if (file.size > 5 * 1024 * 1024) {
+    showProfileMessage('Please choose an image smaller than 5 MB.', true);
+    return;
+  }
   try {
     profileAvatarPreview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="Selected avatar" class="h-full w-full object-cover">`;
     showProfileMessage('Uploading avatar...');
-    const avatarUrl = await uploadAvatar(file);
-    const { error } = await supabase.from('users').upsert({ id: currentUser.id, name: currentProfile.name || currentUser.user_metadata?.name || 'Family member', email: currentUser.email, phone: currentProfile.phone || '', avatar_url: avatarUrl }, { onConflict: 'id' });
+    const avatarPath = await uploadAvatar(file);
+    const { error } = await supabase.from('users').upsert({ id: currentUser.id, name: currentProfile.name || currentUser.user_metadata?.name || 'Family member', email: currentUser.email, phone: currentProfile.phone || '', avatar_url: avatarPath }, { onConflict: 'id' });
     if (error) throw error;
-    currentProfile = { ...currentProfile, avatar_url: avatarUrl };
-    updateProfileUI(currentProfile);
+    currentProfile = { ...currentProfile, avatar_url: avatarPath };
+    await updateProfileUI(currentProfile);
     showProfileMessage('Avatar updated.');
   } catch (error) {
     showProfileMessage(`Avatar upload failed: ${error.message}`, true);
@@ -1488,14 +1549,28 @@ profileForm.addEventListener('submit', async (event) => {
   showProfileMessage('Profile saved successfully.');
 });
 
-supabase.auth.getSession().then(({ data: { session } }) => {
+async function applyAuthSession(session) {
   currentUser = session?.user || null;
-  return showDashboard(Boolean(session), currentUser);
-});
+  if (!currentUser) {
+    currentProfile = null;
+    await showDashboard(false, null);
+    return;
+  }
+
+  try {
+    await showDashboard(true, currentUser);
+  } catch (error) {
+    currentUser = null;
+    currentProfile = null;
+    await showDashboard(false, null);
+    showMessage(`Could not load your account: ${error.message}`, true);
+  }
+}
+
+supabase.auth.getSession().then(({ data: { session } }) => applyAuthSession(session));
 
 supabase.auth.onAuthStateChange((_event, session) => {
-  currentUser = session?.user || null;
-  showDashboard(Boolean(session), currentUser);
+  setTimeout(() => applyAuthSession(session), 0);
 });
 
 function setSidebar(open) {

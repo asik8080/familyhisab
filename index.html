@@ -19,6 +19,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      @media (max-width: 639px) {
+        body { overflow-x: hidden; }
+        #dashboardView header > div { gap: 0.5rem; }
+        #dashboardView header .relative { min-width: 0; }
+        #dashboardView header input { overflow: hidden; padding-left: 2.5rem; padding-right: 0.65rem; text-overflow: ellipsis; }
+        #dashboardMain { padding-top: 1.75rem; }
+      }
+    </style>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   </head>
