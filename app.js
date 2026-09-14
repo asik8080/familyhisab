@@ -1298,6 +1298,7 @@ async function showDashboard(isVisible, user = currentUser, forceDashboard = fal
   if (isVisible) {
     currentUser = user;
     await loadUserContext(currentUser);
+    if (!currentUser || currentUser.id !== user.id) return;
     expenseDate.value = new Date().toISOString().slice(0, 10);
     expenseMemoDate.value = new Date().toISOString().slice(0, 10);
     incomeDate.value = new Date().toISOString().slice(0, 10);
