@@ -1810,7 +1810,7 @@ profileView.addEventListener('click', (event) => {
   if (event.target.closest('[data-profile-add-member]')) showToast('Add family member form opened.');
   if (event.target.closest('[data-profile-add-wallet]')) showToast('Add wallet form opened.');
 });
-profileView.addEventListener('submit', (event) => {
+profileView.addEventListener('submit', async (event) => {
   event.preventDefault();
   const form = event.target;
   if (form.id === 'profileDetailsForm') {
@@ -1819,8 +1819,21 @@ profileView.addEventListener('submit', (event) => {
   }
   if (form.id === 'changePasswordForm') {
     const values = [...form.querySelectorAll('[data-profile-field]')].map((field) => field.value);
-    if (values[1].length < 6 || values[1] !== values[2]) { showToast('Check the new password fields.', true); return; }
-    showToast('Password update request sent.');
+    const newPassword = values[1];
+    const confirmPassword = values[2];
+    if (newPassword.length < 6) { showToast('New password must be at least 6 characters.', true); return; }
+    if (newPassword !== confirmPassword) { showToast('New password and confirm password do not match.', true); return; }
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i data-lucide="loader-circle" class="h-4 w-4 animate-spin"></i> Updating...';
+    if (window.lucide) lucide.createIcons();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    submitButton.disabled = false;
+    submitButton.innerHTML = '<i data-lucide="lock-keyhole" class="h-4 w-4"></i> Update password';
+    if (window.lucide) lucide.createIcons();
+    if (error) { showToast(`Password update failed: ${error.message}`, true); return; }
+    profileState.saved = true;
+    showToast('Password updated successfully. Your old password no longer works.');
     form.reset();
   }
 });
