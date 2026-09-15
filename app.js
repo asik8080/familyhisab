@@ -1697,60 +1697,125 @@ reportLinks.forEach((link) => {
     setSidebar(false);
   });
 });
-const profileTitle = document.querySelector('#profileTitle');
+const profileContent = document.querySelector('#profileContent');
 const profileTabs = document.querySelectorAll('.profile-tab');
 const profileSections = document.querySelectorAll('.profile-section');
-const profileSectionTitles = {
-  general: 'General Information',
-  family: 'Family Members Info',
-  contact: 'Personal & Contact Info',
-  wallets: 'Bank, MFS & Wallets',
-  address: 'Home / Address',
-  password: 'Change Password',
-  notifications: 'Notification Settings',
+const profileState = {
+  tab: 'overview',
+  section: 'notifications',
+  saved: false,
+  notifications: {
+    self: { sms: true, email: true, push: true },
+    spouse: { sms: true, email: true, push: false },
+    family: { sms: false, email: true, push: true },
+  },
+  familyAccess: { dashboard: true, transactions: true, budget: false },
+  profile: { name: 'Ayesha Rahman', email: 'ayesha@example.com', phone: '+880 1712-345678', address: 'House 12, Road 4, Dhaka' },
 };
-
-profileTabs.forEach((tab) => tab.addEventListener('click', () => {
-  profileTabs.forEach((item) => {
-    const active = item === tab;
-    item.classList.toggle('border-navy', active);
-    item.classList.toggle('text-navy', active);
-    item.classList.toggle('border-transparent', !active);
-    item.classList.toggle('text-slate-400', !active);
-  });
-  showToast(`${tab.textContent.trim()} selected.`);
-}));
-
-profileSections.forEach((section) => section.addEventListener('click', () => {
-  profileSections.forEach((item) => {
-    const active = item === section;
-    item.classList.toggle('bg-navy', active);
-    item.classList.toggle('text-white', active);
-    item.classList.toggle('font-bold', active);
-    item.classList.toggle('text-slate-500', !active);
-    item.classList.toggle('text-slate-600', active ? false : item.dataset.profileSection === 'general');
-  });
-  profileTitle.textContent = profileSectionTitles[section.dataset.profileSection];
-}));
-
-document.querySelector('#saveNotificationButton').addEventListener('click', (event) => {
-  const button = event.currentTarget;
-  button.innerHTML = '<i data-lucide="check-check" class="h-4 w-4"></i> Saved';
-  if (window.lucide) lucide.createIcons();
-  showToast('Notification preferences saved.');
-  setTimeout(() => {
-    button.innerHTML = '<i data-lucide="check" class="h-4 w-4"></i> Save preferences';
-    if (window.lucide) lucide.createIcons();
-  }, 1800);
+profileView.querySelectorAll('aside:last-child input[type="checkbox"]').forEach((input, index) => {
+  input.dataset.familyAccess = ['dashboard', 'transactions', 'budget'][index];
 });
 
-document.querySelectorAll('[data-profile-action]').forEach((button) => button.addEventListener('click', () => {
-  const action = button.dataset.profileAction;
-  const view = action === 'income' ? 'income' : action === 'expense' ? 'memo' : 'reports';
-  const hash = action === 'income' ? '#income/add' : action === 'expense' ? '#expense/add' : '#reports';
-  window.location.hash = hash;
-  setAppView(view);
+const profileSectionTitles = { general: 'General Information', family: 'Family Members Info', contact: 'Personal & Contact Info', wallets: 'Bank, MFS & Wallets', address: 'Home / Address', password: 'Change Password', notifications: 'Notification Settings' };
+const profileSectionDescriptions = { general: 'Keep your family workspace identity current.', family: 'Review the people connected to your family account.', contact: 'Manage the details used to reach you.', wallets: 'Keep your payment destinations organized.', address: 'Store the home details used by your household.', password: 'Update your sign-in credentials securely.', notifications: 'Choose how your family stays in the loop about the money that matters.' };
+
+function profileField(label, name, value, type = 'text') {
+  return `<label class="block"><span class="mb-2 block text-xs font-bold text-slate-600">${label}</span><input data-profile-field="${name}" type="${type}" value="${escapeHtml(value)}" class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10"></label>`;
+}
+
+function renderProfileBody() {
+  if (profileState.section === 'notifications') return `<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"><div class="border-b border-slate-100 px-5 py-5 sm:px-6"><div class="flex items-center gap-3"><span class="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700"><i data-lucide="sliders-horizontal" class="h-5 w-5"></i></span><div><h3 class="font-['Space_Grotesk'] text-lg font-bold text-slate-900">Notification channels</h3><p class="mt-1 text-xs text-slate-500">Control updates by family role and delivery method.</p></div></div></div><div class="overflow-x-auto"><div class="min-w-[560px]"><div class="grid grid-cols-[minmax(180px,1fr)_repeat(3,96px)] border-b border-slate-100 bg-slate-50 px-5 py-3 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 sm:px-6"><span>Family role</span><span class="text-center">SMS</span><span class="text-center">Email</span><span class="text-center">Push</span></div><div class="divide-y divide-slate-100">${[['self', 'Self', 'Your personal alerts'], ['spouse', 'Spouse', 'Shared household updates'], ['family', 'Family Members', 'Updates for invited members']].map(([role, label, note]) => `<div class="grid grid-cols-[minmax(180px,1fr)_repeat(3,96px)] items-center px-5 py-4 sm:px-6"><span><strong class="block text-sm font-bold text-slate-800">${label}</strong><small class="mt-1 block text-xs text-slate-400">${note}</small></span>${['sms', 'email', 'push'].map((channel) => `<input data-notification-role="${role}" data-notification-channel="${channel}" type="checkbox" ${profileState.notifications[role][channel] ? 'checked' : ''} class="mx-auto h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">`).join('')}</div>`).join('')}</div></div></div><div class="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"><p class="text-xs text-slate-500">Changes apply to all future family activity alerts.</p><button id="saveNotificationButton" type="button" class="inline-flex items-center justify-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white transition hover:bg-[#27456f]"><i data-lucide="check" class="h-4 w-4"></i> Save preferences</button></div></div>`;
+  if (profileState.section === 'family') return `<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft"><div class="border-b border-slate-100 px-6 py-5"><h3 class="font-['Space_Grotesk'] text-lg font-bold">Family members</h3><p class="mt-1 text-sm text-slate-500">People with access to the Rahman Family workspace.</p></div><div class="divide-y divide-slate-100"><div class="flex items-center justify-between px-6 py-5"><div class="flex items-center gap-3"><span class="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-sm font-bold text-teal-700">AR</span><div><p class="text-sm font-bold">Ayesha Rahman</p><p class="text-xs text-slate-400">ayesha@example.com</p></div></div><span class="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">Admin</span></div><div class="flex items-center justify-between px-6 py-5"><div class="flex items-center gap-3"><span class="grid h-10 w-10 place-items-center rounded-xl bg-orange-50 text-sm font-bold text-orange-700">KR</span><div><p class="text-sm font-bold">Kamal Rahman</p><p class="text-xs text-slate-400">kamal@example.com</p></div></div><span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">Spouse</span></div></div><div class="px-6 py-4"><button type="button" data-profile-add-member class="inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white"><i data-lucide="user-plus" class="h-4 w-4"></i> Add family member</button></div></div>`;
+  if (profileState.section === 'general' || profileState.section === 'contact' || profileState.section === 'address') return `<form id="profileDetailsForm" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"><div class="grid gap-4 sm:grid-cols-2">${profileField('Full name', 'name', profileState.profile.name)}${profileField('Email address', 'email', profileState.profile.email, 'email')}${profileField('Phone number', 'phone', profileState.profile.phone, 'tel')}${profileField('Home / address', 'address', profileState.profile.address)}</div><div class="mt-6 flex justify-end"><button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white"><i data-lucide="save" class="h-4 w-4"></i> Save details</button></div></form>`;
+  if (profileState.section === 'wallets') return `<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"><div class="flex items-start justify-between"><div><h3 class="font-['Space_Grotesk'] text-lg font-bold">Connected wallets</h3><p class="mt-1 text-sm text-slate-500">Choose where your household transactions are tracked.</p></div><button type="button" data-profile-add-wallet class="rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white">Add wallet</button></div><div class="mt-6 space-y-3"><div class="flex items-center justify-between rounded-xl border border-slate-100 p-4"><span class="flex items-center gap-3 text-sm font-bold"><span class="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700">BK</span> Brac Bank</span><span class="text-xs font-semibold text-emerald-600">Connected</span></div><div class="flex items-center justify-between rounded-xl border border-slate-100 p-4"><span class="flex items-center gap-3 text-sm font-bold"><span class="grid h-9 w-9 place-items-center rounded-lg bg-orange-50 text-orange-700">BK</span> bKash Wallet</span><span class="text-xs font-semibold text-emerald-600">Connected</span></div></div></div>`;
+  return `<form id="changePasswordForm" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft"><h3 class="font-['Space_Grotesk'] text-lg font-bold">Change password</h3><p class="mt-1 text-sm text-slate-500">Use at least 6 characters for your new password.</p><div class="mt-6 space-y-4">${profileField('Current password', 'currentPassword', '', 'password')}${profileField('New password', 'newPassword', '', 'password')}${profileField('Confirm new password', 'confirmPassword', '', 'password')}</div><div class="mt-6 flex justify-end"><button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-navy px-4 py-2.5 text-xs font-bold text-white"><i data-lucide="lock-keyhole" class="h-4 w-4"></i> Update password</button></div></form>`;
+}
+
+function renderProfile() {
+  const title = profileState.tab === 'overview' ? profileSectionTitles[profileState.section] : { 'income-expense': 'Income & Expense', 'family-members': 'Family Members', 'monthly-budget': 'Monthly Budget', reports: 'Reports' }[profileState.tab];
+  const description = profileState.tab === 'overview' ? profileSectionDescriptions[profileState.section] : 'A focused view of your family workspace data.';
+  profileTabs.forEach((tab) => {
+    const active = tab.dataset.profileTab === profileState.tab;
+    tab.classList.toggle('border-navy', active);
+    tab.classList.toggle('text-navy', active);
+    tab.classList.toggle('font-bold', active);
+    tab.classList.toggle('border-transparent', !active);
+    tab.classList.toggle('text-slate-400', !active);
+  });
+  profileSections.forEach((section) => {
+    const active = profileState.tab === 'overview' && section.dataset.profileSection === profileState.section;
+    section.classList.toggle('bg-navy', active);
+    section.classList.toggle('text-white', active);
+    section.classList.toggle('font-bold', active);
+    section.classList.toggle('text-slate-500', !active);
+    section.classList.toggle('text-slate-600', !active);
+  });
+  profileContent.innerHTML = `<div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Account workspace</p><h2 id="profileTitle" class="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-slate-900">${title}</h2><p class="mt-2 max-w-xl text-sm leading-6 text-slate-500">${description}</p></div><span class="inline-flex w-fit items-center gap-2 rounded-full ${profileState.saved ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-bold"><span class="h-2 w-2 rounded-full ${profileState.saved ? 'bg-emerald-500' : 'bg-slate-400'}"></span> ${profileState.saved ? 'Preferences saved' : 'Draft changes'}</span></div><div class="mt-7">${profileState.tab === 'overview' ? renderProfileBody() : `<div class="rounded-2xl border border-slate-200 bg-white p-8 shadow-soft"><div class="grid gap-4 sm:grid-cols-3"><div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-semibold text-slate-400">This month</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold">BDT 42,850</p></div><div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs font-semibold text-emerald-600">Income</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-emerald-800">BDT 78,000</p></div><div class="rounded-xl bg-rose-50 p-4"><p class="text-xs font-semibold text-rose-600">Expense</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-rose-800">BDT 35,150</p></div></div><div class="mt-7 border-t border-slate-100 pt-6"><h3 class="font-['Space_Grotesk'] text-lg font-bold">${title} dashboard</h3><p class="mt-2 text-sm leading-6 text-slate-500">Your ${title.toLowerCase()} view is ready. Use the quick actions on the right to continue.</p></div></div>`}</div>`;
+  if (window.lucide) lucide.createIcons();
+}
+
+function saveProfilePreferences() {
+  profileState.saved = true;
+  renderProfile();
+  showToast('Profile preferences saved.');
+}
+
+profileTabs.forEach((tab) => tab.addEventListener('click', () => {
+  profileState.tab = tab.dataset.profileTab;
+  renderProfile();
 }));
+profileSections.forEach((section) => section.addEventListener('click', () => {
+  profileState.tab = 'overview';
+  profileState.section = section.dataset.profileSection;
+  renderProfile();
+}));
+profileView.addEventListener('change', (event) => {
+  const input = event.target;
+  if (input.matches('[data-notification-role]')) profileState.notifications[input.dataset.notificationRole][input.dataset.notificationChannel] = input.checked;
+  if (input.matches('[data-family-access]')) profileState.familyAccess[input.dataset.familyAccess] = input.checked;
+  profileState.saved = false;
+});
+profileView.addEventListener('click', (event) => {
+  const actionButton = event.target.closest('[data-profile-action]');
+  const exportButton = event.target.closest('[data-profile-export]');
+  if (event.target.closest('#saveNotificationButton')) saveProfilePreferences();
+  if (actionButton) {
+    const action = actionButton.dataset.profileAction;
+    window.location.hash = action === 'income' ? '#income/add' : action === 'expense' ? '#expense/add' : '#reports';
+    setAppView(action === 'income' ? 'income' : action === 'expense' ? 'memo' : 'reports');
+  }
+  if (exportButton) mockProfileExport(exportButton.dataset.profileExport);
+  if (event.target.closest('[data-profile-add-member]')) showToast('Add family member form opened.');
+  if (event.target.closest('[data-profile-add-wallet]')) showToast('Add wallet form opened.');
+});
+profileView.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const form = event.target;
+  if (form.id === 'profileDetailsForm') {
+    form.querySelectorAll('[data-profile-field]').forEach((field) => { profileState.profile[field.dataset.profileField] = field.value.trim(); });
+    saveProfilePreferences();
+  }
+  if (form.id === 'changePasswordForm') {
+    const values = [...form.querySelectorAll('[data-profile-field]')].map((field) => field.value);
+    if (values[1].length < 6 || values[1] !== values[2]) { showToast('Check the new password fields.', true); return; }
+    showToast('Password update request sent.');
+    form.reset();
+  }
+});
+
+async function mockProfileExport(format) {
+  const rows = [['Family', 'Rahman Family'], ['Generated', new Date().toISOString()], ['Balance', 'BDT 42,850']];
+  if (format === 'csv') {
+    const csv = rows.map((row) => row.join(',')).join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    link.download = 'familyhisab-profile.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+  showToast(`${format.toUpperCase()} export request completed.`);
+}
+renderProfile();
 document.querySelector('#expenseTypesBack').addEventListener('click', () => {
   setAppView('dashboard');
   window.location.hash = '#dashboard';
