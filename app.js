@@ -1317,7 +1317,8 @@ async function showDashboard(isVisible, user = currentUser, forceDashboard = fal
     subscribeToExpenses();
     if (forceDashboard) window.location.hash = '#dashboard';
     const route = window.location.hash;
-    setAppView(route === '#profile' ? 'profile' : route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/all' ? 'income-all' : route === '#income/add' || route === '#income' ? 'income' : route === '#reports/cash-in-hand' ? 'cash-in-hand' : route === '#reports/income-statement' ? 'income-statement' : route === '#reports/expense' ? 'expense-report' : route === '#reports' ? 'reports' : route === '#members' ? 'members' : 'dashboard');
+    setAppView(route.startsWith('#profile') ? 'profile' : route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/all' ? 'income-all' : route === '#income/add' || route === '#income' ? 'income' : route === '#reports/cash-in-hand' ? 'cash-in-hand' : route === '#reports/income-statement' ? 'income-statement' : route === '#reports/expense' ? 'expense-report' : route === '#reports' ? 'reports' : route === '#members' ? 'members' : 'dashboard');
+    if (route.startsWith('#profile')) setProfileRoute(route);
     if (!route || route === '#dashboard') collapseNavigationMenus();
   } else {
     dashboardLoadUserId = null;
@@ -1701,6 +1702,7 @@ const profileContent = document.querySelector('#profileContent');
 const profileTabs = document.querySelectorAll('.profile-tab');
 const profileSections = document.querySelectorAll('.profile-section');
 const profileState = {
+  surface: 'section',
   tab: 'overview',
   section: 'notifications',
   saved: false,
@@ -1718,6 +1720,23 @@ profileView.querySelectorAll('aside:last-child input[type="checkbox"]').forEach(
 
 const profileSectionTitles = { general: 'General Information', family: 'Family Members Info', contact: 'Personal & Contact Info', wallets: 'Bank, MFS & Wallets', address: 'Home / Address', password: 'Change Password', notifications: 'Notification Settings' };
 const profileSectionDescriptions = { general: 'Keep your family workspace identity current.', family: 'Review the people connected to your family account.', contact: 'Manage the details used to reach you.', wallets: 'Keep your payment destinations organized.', address: 'Store the home details used by your household.', password: 'Update your sign-in credentials securely.', notifications: 'Choose how your family stays in the loop about the money that matters.' };
+const profileTabTitles = { overview: 'Overview', 'income-expense': 'Income & Expense', 'family-members': 'Family Members', 'monthly-budget': 'Monthly Budget', reports: 'Reports' };
+
+function setProfileRoute(route) {
+  if (route === '#profile') {
+    profileState.section = 'notifications';
+    profileState.surface = 'section';
+  } else if (route.startsWith('#profile/settings/')) {
+    const section = route.replace('#profile/settings/', '');
+    if (profileSectionTitles[section]) profileState.section = section;
+    profileState.surface = 'section';
+  } else if (route.startsWith('#profile/')) {
+    const tab = route.replace('#profile/', '');
+    if (profileTabTitles[tab]) profileState.tab = tab;
+    profileState.surface = 'tab';
+  }
+  renderProfile();
+}
 
 function profileField(label, name, value, type = 'text') {
   return `<label class="block"><span class="mb-2 block text-xs font-bold text-slate-600">${label}</span><input data-profile-field="${name}" type="${type}" value="${escapeHtml(value)}" class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none transition focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10"></label>`;
@@ -1732,10 +1751,10 @@ function renderProfileBody() {
 }
 
 function renderProfile() {
-  const title = profileState.tab === 'overview' ? profileSectionTitles[profileState.section] : { 'income-expense': 'Income & Expense', 'family-members': 'Family Members', 'monthly-budget': 'Monthly Budget', reports: 'Reports' }[profileState.tab];
-  const description = profileState.tab === 'overview' ? profileSectionDescriptions[profileState.section] : 'A focused view of your family workspace data.';
+  const title = profileState.surface === 'section' ? profileSectionTitles[profileState.section] : profileTabTitles[profileState.tab];
+  const description = profileState.surface === 'section' ? profileSectionDescriptions[profileState.section] : 'A focused view of your family workspace data.';
   profileTabs.forEach((tab) => {
-    const active = tab.dataset.profileTab === profileState.tab;
+    const active = profileState.surface === 'tab' && tab.dataset.profileTab === profileState.tab;
     tab.classList.toggle('border-navy', active);
     tab.classList.toggle('text-navy', active);
     tab.classList.toggle('font-bold', active);
@@ -1743,14 +1762,14 @@ function renderProfile() {
     tab.classList.toggle('text-slate-400', !active);
   });
   profileSections.forEach((section) => {
-    const active = profileState.tab === 'overview' && section.dataset.profileSection === profileState.section;
+    const active = profileState.surface === 'section' && section.dataset.profileSection === profileState.section;
     section.classList.toggle('bg-navy', active);
     section.classList.toggle('text-white', active);
     section.classList.toggle('font-bold', active);
     section.classList.toggle('text-slate-500', !active);
     section.classList.toggle('text-slate-600', !active);
   });
-  profileContent.innerHTML = `<div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Account workspace</p><h2 id="profileTitle" class="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-slate-900">${title}</h2><p class="mt-2 max-w-xl text-sm leading-6 text-slate-500">${description}</p></div><span class="inline-flex w-fit items-center gap-2 rounded-full ${profileState.saved ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-bold"><span class="h-2 w-2 rounded-full ${profileState.saved ? 'bg-emerald-500' : 'bg-slate-400'}"></span> ${profileState.saved ? 'Preferences saved' : 'Draft changes'}</span></div><div class="mt-7">${profileState.tab === 'overview' ? renderProfileBody() : `<div class="rounded-2xl border border-slate-200 bg-white p-8 shadow-soft"><div class="grid gap-4 sm:grid-cols-3"><div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-semibold text-slate-400">This month</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold">BDT 42,850</p></div><div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs font-semibold text-emerald-600">Income</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-emerald-800">BDT 78,000</p></div><div class="rounded-xl bg-rose-50 p-4"><p class="text-xs font-semibold text-rose-600">Expense</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-rose-800">BDT 35,150</p></div></div><div class="mt-7 border-t border-slate-100 pt-6"><h3 class="font-['Space_Grotesk'] text-lg font-bold">${title} dashboard</h3><p class="mt-2 text-sm leading-6 text-slate-500">Your ${title.toLowerCase()} view is ready. Use the quick actions on the right to continue.</p></div></div>`}</div>`;
+  profileContent.innerHTML = `<div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-xs font-bold uppercase tracking-[0.18em] text-teal-700">Account workspace</p><h2 id="profileTitle" class="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-slate-900">${title}</h2><p class="mt-2 max-w-xl text-sm leading-6 text-slate-500">${description}</p></div><span class="inline-flex w-fit items-center gap-2 rounded-full ${profileState.saved ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'} px-3 py-2 text-xs font-bold"><span class="h-2 w-2 rounded-full ${profileState.saved ? 'bg-emerald-500' : 'bg-slate-400'}"></span> ${profileState.saved ? 'Preferences saved' : 'Draft changes'}</span></div><div class="mt-7">${profileState.surface === 'section' ? renderProfileBody() : `<div class="rounded-2xl border border-slate-200 bg-white p-8 shadow-soft"><div class="grid gap-4 sm:grid-cols-3"><div class="rounded-xl bg-slate-50 p-4"><p class="text-xs font-semibold text-slate-400">This month</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold">BDT 42,850</p></div><div class="rounded-xl bg-emerald-50 p-4"><p class="text-xs font-semibold text-emerald-600">Income</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-emerald-800">BDT 78,000</p></div><div class="rounded-xl bg-rose-50 p-4"><p class="text-xs font-semibold text-rose-600">Expense</p><p class="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-rose-800">BDT 35,150</p></div></div><div class="mt-7 border-t border-slate-100 pt-6"><h3 class="font-['Space_Grotesk'] text-lg font-bold">${title} dashboard</h3><p class="mt-2 text-sm leading-6 text-slate-500">Your ${title.toLowerCase()} view is ready. Use the quick actions on the right to continue.</p></div></div>`}</div>`;
   if (window.lucide) lucide.createIcons();
 }
 
@@ -1761,12 +1780,15 @@ function saveProfilePreferences() {
 }
 
 profileTabs.forEach((tab) => tab.addEventListener('click', () => {
+  profileState.surface = 'tab';
   profileState.tab = tab.dataset.profileTab;
+  window.location.hash = `#profile/${profileState.tab}`;
   renderProfile();
 }));
 profileSections.forEach((section) => section.addEventListener('click', () => {
-  profileState.tab = 'overview';
+  profileState.surface = 'section';
   profileState.section = section.dataset.profileSection;
+  window.location.hash = `#profile/settings/${profileState.section}`;
   renderProfile();
 }));
 profileView.addEventListener('change', (event) => {
