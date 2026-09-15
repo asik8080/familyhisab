@@ -70,6 +70,7 @@ const nationalityInput = document.querySelector('#nationalityInput');
 const idCardInput = document.querySelector('#idCardInput');
 const signupConfirmPasswordInput = document.querySelector('#signupConfirmPasswordInput');
 const dashboardMain = document.querySelector('#dashboardMain');
+const profileView = document.querySelector('#profileView');
 const expenseTypesView = document.querySelector('#expenseTypesView');
 const expenseTypeModal = document.querySelector('#expenseTypeModal');
 const expenseTypeForm = document.querySelector('#expenseTypeForm');
@@ -530,6 +531,7 @@ function setAppView(view) {
   document.querySelector('#allExpensesTitle').textContent = showingDeletedExpenses ? 'Deleted Expenses' : 'All Expenses';
   showingDeletedIncomes = view === 'deleted-income';
   dashboardMain.classList.toggle('hidden', view !== 'dashboard');
+  profileView.classList.toggle('hidden', view !== 'profile');
   incomeTypesView.classList.toggle('hidden', view !== 'income-types');
   incomeView.classList.toggle('hidden', view !== 'income' && view !== 'deleted-income');
   allIncomeView.classList.toggle('hidden', view !== 'income-all');
@@ -1315,7 +1317,7 @@ async function showDashboard(isVisible, user = currentUser, forceDashboard = fal
     subscribeToExpenses();
     if (forceDashboard) window.location.hash = '#dashboard';
     const route = window.location.hash;
-    setAppView(route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/all' ? 'income-all' : route === '#income/add' || route === '#income' ? 'income' : route === '#reports/cash-in-hand' ? 'cash-in-hand' : route === '#reports/income-statement' ? 'income-statement' : route === '#reports/expense' ? 'expense-report' : route === '#reports' ? 'reports' : route === '#members' ? 'members' : 'dashboard');
+    setAppView(route === '#profile' ? 'profile' : route === '#expense-types' ? 'types' : route === '#expenses/all' ? 'all' : route === '#deleted-expenses' ? 'deleted' : route === '#expense/add' ? 'memo' : route === '#income-types' ? 'income-types' : route === '#deleted-income' ? 'deleted-income' : route === '#income/all' ? 'income-all' : route === '#income/add' || route === '#income' ? 'income' : route === '#reports/cash-in-hand' ? 'cash-in-hand' : route === '#reports/income-statement' ? 'income-statement' : route === '#reports/expense' ? 'expense-report' : route === '#reports' ? 'reports' : route === '#members' ? 'members' : 'dashboard');
     if (!route || route === '#dashboard') collapseNavigationMenus();
   } else {
     dashboardLoadUserId = null;
@@ -1486,7 +1488,13 @@ profileButton.addEventListener('click', (event) => {
   profileButton.setAttribute('aria-expanded', String(!profileDropdown.classList.contains('hidden')));
 });
 
-document.querySelector('#openProfileButton').addEventListener('click', () => setProfileModal(true));
+document.querySelector('#openProfileButton').addEventListener('click', () => {
+  profileDropdown.classList.add('hidden');
+  profileButton.setAttribute('aria-expanded', 'false');
+  window.location.hash = '#profile';
+  setAppView('profile');
+  setSidebar(false);
+});
 document.querySelector('#closeProfileModal').addEventListener('click', () => setProfileModal(false));
 document.querySelector('#cancelProfileButton').addEventListener('click', () => setProfileModal(false));
 profileModal.addEventListener('click', (event) => {
@@ -1689,6 +1697,60 @@ reportLinks.forEach((link) => {
     setSidebar(false);
   });
 });
+const profileTitle = document.querySelector('#profileTitle');
+const profileTabs = document.querySelectorAll('.profile-tab');
+const profileSections = document.querySelectorAll('.profile-section');
+const profileSectionTitles = {
+  general: 'General Information',
+  family: 'Family Members Info',
+  contact: 'Personal & Contact Info',
+  wallets: 'Bank, MFS & Wallets',
+  address: 'Home / Address',
+  password: 'Change Password',
+  notifications: 'Notification Settings',
+};
+
+profileTabs.forEach((tab) => tab.addEventListener('click', () => {
+  profileTabs.forEach((item) => {
+    const active = item === tab;
+    item.classList.toggle('border-navy', active);
+    item.classList.toggle('text-navy', active);
+    item.classList.toggle('border-transparent', !active);
+    item.classList.toggle('text-slate-400', !active);
+  });
+  showToast(`${tab.textContent.trim()} selected.`);
+}));
+
+profileSections.forEach((section) => section.addEventListener('click', () => {
+  profileSections.forEach((item) => {
+    const active = item === section;
+    item.classList.toggle('bg-navy', active);
+    item.classList.toggle('text-white', active);
+    item.classList.toggle('font-bold', active);
+    item.classList.toggle('text-slate-500', !active);
+    item.classList.toggle('text-slate-600', active ? false : item.dataset.profileSection === 'general');
+  });
+  profileTitle.textContent = profileSectionTitles[section.dataset.profileSection];
+}));
+
+document.querySelector('#saveNotificationButton').addEventListener('click', (event) => {
+  const button = event.currentTarget;
+  button.innerHTML = '<i data-lucide="check-check" class="h-4 w-4"></i> Saved';
+  if (window.lucide) lucide.createIcons();
+  showToast('Notification preferences saved.');
+  setTimeout(() => {
+    button.innerHTML = '<i data-lucide="check" class="h-4 w-4"></i> Save preferences';
+    if (window.lucide) lucide.createIcons();
+  }, 1800);
+});
+
+document.querySelectorAll('[data-profile-action]').forEach((button) => button.addEventListener('click', () => {
+  const action = button.dataset.profileAction;
+  const view = action === 'income' ? 'income' : action === 'expense' ? 'memo' : 'reports';
+  const hash = action === 'income' ? '#income/add' : action === 'expense' ? '#expense/add' : '#reports';
+  window.location.hash = hash;
+  setAppView(view);
+}));
 document.querySelector('#expenseTypesBack').addEventListener('click', () => {
   setAppView('dashboard');
   window.location.hash = '#dashboard';
